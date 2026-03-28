@@ -1,0 +1,12 @@
+Flow:                                                                                                                                                                               
+  1. Main script runs weekly → insufficient balance → writes retry.json → sends email                                                                                                 
+  2. retry_buy.py runs daily via cron → checks if retry.json exists → if not, exits immediately                                                                                       
+  3. If retry.json found → checks balance again → executes same order → resets skipped_weeks → deletes retry.json                                                                     
+  4. If retry also fails → sends email → deletes retry.json (no infinite loop)                                                                                                        
+                                                                                                                                                                                      
+  Cron setup (run crontab -e on your server):                                                                                                                                         
+  # Main script — every Monday at 9am                                                                                                                                                 
+  0 9 * * 1 python3 /path/to/BTC-DCA-BOT/binance-DCA.py                                                                                                                             
+                                                                                                                                                                                      
+  # Retry check — every day at 9am                                                                                                                                                    
+  0 9 * * * python3 /path/to/BTC-DCA-BOT/retry_buy.py  
