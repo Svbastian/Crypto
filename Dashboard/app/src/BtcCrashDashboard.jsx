@@ -4,8 +4,31 @@ import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, Zap, ShieldCheck, ListOrdered, BarChart3 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceDot } from 'recharts';
 
-export default function BtcCrashDashboard() {
+export default function BtcCrashDashboard({ liveData = null }) {
   const [activeTab, setActiveTab] = useState('overview');
+
+  const liveStats = useMemo(() => {
+    if (!liveData?.crashBuys?.length) return null;
+    const buys = liveData.crashBuys.map(e => ({
+      date:      (e.timestamp || '').slice(0, 10),
+      price:     e.price,
+      usdtSpent: e.usdt_spent,
+      btcBought: e.btc_bought,
+      dipPct:    e.dip_pct || 0,
+      tier:      e.tier || 'Crash buy',
+      units:     e.units_requested || 1,
+    }));
+    const totalInvested = buys.reduce((s, e) => s + e.usdtSpent, 0);
+    const totalBtc      = buys.reduce((s, e) => s + e.btcBought, 0);
+    const currentPrice  = liveData.btcPrice || 0;
+    const avgBuyPrice   = totalInvested / totalBtc;
+    const positionValue = totalBtc * currentPrice;
+    const pnl           = positionValue - totalInvested;
+    const pnlPct        = (pnl / totalInvested) * 100;
+    const tierCounts    = { 'Tier 1 (-10%)': 0, 'Tier 2 (-15%)': 0, 'Tier 3 (-20%)': 0 };
+    buys.forEach(e => { if (tierCounts[e.tier] !== undefined) tierCounts[e.tier]++; });
+    return { buys, totalInvested, totalBtc, avgBuyPrice, positionValue, pnl, pnlPct, tierCounts, currentPrice };
+  }, [liveData]);
 
   const USDT_PER_UNIT = 25;
   const TIERS = [
@@ -179,16 +202,15 @@ export default function BtcCrashDashboard() {
           <>
             {/* Stat cards */}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard title="Average Buy Price"  value={formatUsd(simulation.avgBuyPrice)}   subtitle="weighted average across all crash buys"        icon={Target} />
-              <StatCard
-                title="Profit / Loss"
-                value={formatUsd(simulation.pnl)}
-                valueClassName={simulation.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}
-                subtitle={`${simulation.pnlPct >= 0 ? '+' : ''}${simulation.pnlPct.toFixed(2)}% vs invested capital`}
-                icon={simulation.pnl >= 0 ? TrendingUp : TrendingDown}
-              />
-              <StatCard title="Position Value"    value={formatUsd(simulation.positionValue)} subtitle="market value of crash bot BTC holdings"         icon={Wallet} />
-              <StatCard title="BTC Accumulated"   value={formatBtc(simulation.totalBtc)}      subtitle={formatUsd(simulation.totalInvested) + ' total invested'} icon={Bitcoin} />
+              {(() => {
+                const s = liveStats || simulation;
+                return (<>
+                  <StatCard title="Average Buy Price" value={formatUsd(s.avgBuyPrice)} subtitle="weighted average across all crash buys" icon={Target} />
+                  <StatCard title="Profit / Loss" value={formatUsd(s.pnl)} valueClassName={s.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'} subtitle={`${s.pnlPct >= 0 ? '+' : ''}${s.pnlPct.toFixed(2)}% vs invested capital`} icon={s.pnl >= 0 ? TrendingUp : TrendingDown} />
+                  <StatCard title="Position Value" value={formatUsd(s.positionValue)} subtitle="market value of crash bot BTC holdings" icon={Wallet} />
+                  <StatCard title="BTC Accumulated" value={formatBtc(s.totalBtc)} subtitle={formatUsd(s.totalInvested) + ' total invested'} icon={Bitcoin} />
+                </>);
+              })()}
             </div>
 
             {/* Chart + sidebar */}
@@ -253,8 +275,8 @@ export default function BtcCrashDashboard() {
                           <span className="text-slate-700">{t.label}</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-slate-500">{simulation.tierCounts[t.label]}x</span>
-                          <span className="font-medium text-slate-900">{formatUsd(simulation.tierCounts[t.label] * t.units * USDT_PER_UNIT)}</span>
+                          <span className="text-slate-500">{(liveStats || simulation).tierCounts[t.label]}x</span>
+                          <span className="font-medium text-slate-900">{formatUsd((liveStats || simulation).tierCounts[t.label] * t.units * USDT_PER_UNIT)}</span>
                         </div>
                       </div>
                     ))}
@@ -303,7 +325,7 @@ export default function BtcCrashDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {simulation.enriched.map((buy, i) => (
+                    {(liveStats ? liveStats.buys : simulation.enriched).map((buy, i) => (
                       <tr key={buy.date + i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                         <td className="px-4 py-3 text-slate-700">{buy.date}</td>
                         <td className="px-4 py-3">

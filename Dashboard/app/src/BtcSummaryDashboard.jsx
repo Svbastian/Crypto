@@ -1,12 +1,10 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { dcaBuyEvents, crashBuyEvents, btcPriceSeries, CURRENT_BTC_PRICE } from './data/botData';
-import { useLiveData } from './hooks/useLiveData';
 
-export default function BtcSummaryDashboard() {
-  const { data: liveData, loading, error, lastUpdated, refresh } = useLiveData();
+export default function BtcSummaryDashboard({ liveData = null }) {
 
   // Normalize live DCA log entries to match botData shape
   const normalizeDca = (e) => ({
@@ -111,22 +109,11 @@ export default function BtcSummaryDashboard() {
       <div className="mx-auto max-w-7xl space-y-6">
 
         {/* Header */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Combined Summary</h1>
-            <p className="mt-1 text-slate-600">
-              Overall performance across both the DCA bot and Crash bot — {stats.all.length} total buys.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            {loading && <span className="text-slate-400">Fetching live data…</span>}
-            {error   && <span className="text-amber-500">⚠ API offline — showing mock data</span>}
-            {isLive  && <span className="flex items-center gap-1.5 text-emerald-600"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Live data</span>}
-            {lastUpdated && <span className="text-slate-400">Updated {lastUpdated.toLocaleTimeString()}</span>}
-            <button onClick={refresh} className="rounded-lg bg-slate-100 p-2 hover:bg-slate-200 transition" title="Refresh">
-              <RefreshCw className="h-4 w-4 text-slate-600" />
-            </button>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Combined Summary</h1>
+          <p className="mt-1 text-slate-600">
+            Overall performance across both the DCA bot and Crash bot — {stats.all.length} total buys.
+          </p>
         </div>
 
         {/* Top stat cards */}

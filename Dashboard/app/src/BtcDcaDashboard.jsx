@@ -4,8 +4,28 @@ import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, CalendarClock, Layers, Repeat, ListOrdered, BarChart3 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-export default function BtcDcaDashboard() {
+export default function BtcDcaDashboard({ liveData = null }) {
   const [activeTab, setActiveTab] = useState('overview');
+
+  // If live data is provided, derive real stats from buy_log.json entries
+  const liveStats = useMemo(() => {
+    if (!liveData?.dcaBuys?.length) return null;
+    const buys = liveData.dcaBuys.map(e => ({
+      date:       (e.timestamp || '').slice(0, 10),
+      price:      e.price,
+      usdtSpent:  e.usdt_spent,
+      btcBought:  e.btc_bought,
+      trigger:    e.units_requested ? `${e.units_requested}× buy` : 'buy',
+    }));
+    const totalInvested = buys.reduce((s, e) => s + e.usdtSpent, 0);
+    const totalBtc      = buys.reduce((s, e) => s + e.btcBought, 0);
+    const currentPrice  = liveData.btcPrice || 0;
+    const avgBuyPrice   = totalInvested / totalBtc;
+    const positionValue = totalBtc * currentPrice;
+    const pnl           = positionValue - totalInvested;
+    const pnlPct        = (pnl / totalInvested) * 100;
+    return { buys, totalInvested, totalBtc, avgBuyPrice, positionValue, pnl, pnlPct, currentPrice };
+  }, [liveData]);
 
   const BASE_UNIT = 25;
   const MULTIPLIERS = {
@@ -256,42 +276,15 @@ export default function BtcDcaDashboard() {
         {activeTab === 'overview' && (
           <>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                title="Average Buy Price"
-                value={formatUsd(simulation.avgBuyPrice)}
-                subtitle="weighted average across all executed buys"
-                icon={Target}
-                trend={<span className="text-slate-500">Avg</span>}
-              />
-
-              <StatCard
-                title="Profit / Loss"
-                value={formatUsd(simulation.pnl)}
-                valueClassName={simulation.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}
-                subtitle={`${simulation.pnlPct >= 0 ? '+' : ''}${simulation.pnlPct.toFixed(2)}% vs invested capital`}
-                icon={simulation.pnl >= 0 ? TrendingUp : TrendingDown}
-                trend={
-                  <span className={`font-medium ${simulation.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {simulation.pnl >= 0 ? 'In profit' : 'In loss'}
-                  </span>
-                }
-              />
-
-              <StatCard
-                title="Position Value"
-                value={formatUsd(simulation.positionValue)}
-                subtitle="market value of your BTC holdings"
-                icon={Wallet}
-                trend={<span className="text-slate-500">Now</span>}
-              />
-
-              <StatCard
-                title="BTC Accumulated"
-                value={formatBtc(simulation.totalBtc)}
-                subtitle={formatUsd(simulation.totalInvested) + ' total invested'}
-                icon={Bitcoin}
-                trend={<span className="text-slate-500">Stacked</span>}
-              />
+              {(() => {
+                const s = liveStats || simulation;
+                return (<>
+                  <StatCard title="Average Buy Price" value={formatUsd(s.avgBuyPrice)} subtitle="weighted average across all executed buys" icon={Target} trend={<span className="text-slate-500">Avg</span>} />
+                  <StatCard title="Profit / Loss" value={formatUsd(s.pnl)} valueClassName={s.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'} subtitle={`${s.pnlPct >= 0 ? '+' : ''}${s.pnlPct.toFixed(2)}% vs invested capital`} icon={s.pnl >= 0 ? TrendingUp : TrendingDown} trend={<span className={`font-medium ${s.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{s.pnl >= 0 ? 'In profit' : 'In loss'}</span>} />
+                  <StatCard title="Position Value" value={formatUsd(s.positionValue)} subtitle="market value of your BTC holdings" icon={Wallet} trend={<span className="text-slate-500">Now</span>} />
+                  <StatCard title="BTC Accumulated" value={formatBtc(s.totalBtc)} subtitle={formatUsd(s.totalInvested) + ' total invested'} icon={Bitcoin} trend={<span className="text-slate-500">Stacked</span>} />
+                </>);
+              })()}
             </div>
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
@@ -431,20 +424,20 @@ export default function BtcDcaDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {simulation.buyEvents.map((buy, index) => (
-                      <tr key={buy.time} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                    {(liveStats ? liveStats.buys : simulation.buyEvents).map((buy, index) => (
+                      <tr key={buy.date + index} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                         <td className="px-4 py-3 text-slate-700">{buy.date}</td>
                         <td className="px-4 py-3">
                           <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
                             {buy.trigger}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{buy.retainedWeeksIncluded}</td>
-                        <td className="px-4 py-3 text-slate-700">{buy.multiplier}x</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-600">{buy.formulaText}</td>
+                        <td className="px-4 py-3 text-slate-700">{buy.retainedWeeksIncluded ?? '—'}</td>
+                        <td className="px-4 py-3 text-slate-700">{buy.multiplier != null ? `${buy.multiplier}x` : '—'}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-600">{buy.formulaText ?? '—'}</td>
                         <td className="px-4 py-3 text-slate-700">{formatUsd(buy.price)}</td>
                         <td className="px-4 py-3 font-medium text-slate-900">{formatUsd(buy.usdtSpent)}</td>
-                        <td className="px-4 py-3 text-slate-700">{formatBtc(buy.btcBought)}</td>
+                        <td className="px-4 py-3 text-slate-700">{formatBtc(buy.btcBought ?? buy.usdtSpent / buy.price)}</td>
                       </tr>
                     ))}
                   </tbody>
