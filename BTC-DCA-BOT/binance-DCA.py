@@ -98,7 +98,7 @@ except FileNotFoundError:
 if should_buy:
     total_weeks = skipped_weeks + 1
     total_to_buy = base_unit * total_weeks
-    usdt_per_unit = 10
+    usdt_per_unit = 25
     quote_order_value = usdt_per_unit * total_to_buy
 
     # === Check Balance ===
