@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
-import { dcaBuyEvents, crashBuyEvents, CURRENT_BTC_PRICE } from './data/botData';
+import { dcaBuyEvents, crashBuyEvents, btcPriceSeries, CURRENT_BTC_PRICE } from './data/botData';
 
 export default function BtcSummaryDashboard() {
 
@@ -24,12 +24,25 @@ export default function BtcSummaryDashboard() {
     const pnl           = positionValue - totalInvested;
     const pnlPct        = (pnl / totalInvested) * 100;
 
-    // Running combined avg buy price over time
+    // Build chart: merge BTC price series with running avg buy price
     let runBtc = 0, runInvested = 0;
-    const avgLine = all.map(e => {
+    const buyByDate = {};
+    all.forEach(e => {
       runBtc      += e.btcBought;
       runInvested += e.usdtSpent;
-      return { date: e.date, avgBuyPrice: runInvested / runBtc, bot: e.bot };
+      buyByDate[e.date] = { avgBuyPrice: runInvested / runBtc, bot: e.bot };
+    });
+
+    // Walk price series, carry forward latest avgBuyPrice
+    let lastAvg = null;
+    const avgLine = btcPriceSeries.map(p => {
+      if (buyByDate[p.date]) lastAvg = buyByDate[p.date];
+      return {
+        date:        p.date,
+        btcPrice:    p.btcPrice,
+        avgBuyPrice: lastAvg ? lastAvg.avgBuyPrice : null,
+        bot:         lastAvg ? lastAvg.bot : null,
+      };
     });
 
     // Monthly spend breakdown for bar chart
@@ -100,8 +113,8 @@ export default function BtcSummaryDashboard() {
           {/* Avg buy price over time */}
           <Card className="rounded-2xl border-0 shadow-lg shadow-black/5 xl:col-span-2">
             <CardHeader>
-              <CardTitle className="text-lg">Running Average Buy Price</CardTitle>
-              <p className="text-sm text-slate-500">How your combined average entry price evolved with every buy across both bots.</p>
+              <CardTitle className="text-lg">BTC Price vs Running Average Buy Price</CardTitle>
+              <p className="text-sm text-slate-500">Orange = BTC price. Blue = combined average buy price stepping up with each purchase. Dots mark individual buys.</p>
             </CardHeader>
             <CardContent>
               <div className="h-[320px]">
@@ -110,9 +123,11 @@ export default function BtcSummaryDashboard() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={v => v.slice(2)} interval={4} />
                     <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 3000', 'dataMax + 3000']} />
-                    <Tooltip formatter={(v) => [formatUsd(v), 'Avg Buy Price']} labelFormatter={l => `Date: ${l}`} />
-                    <Line type="stepAfter" dataKey="avgBuyPrice" name="Combined Avg" stroke="#2563eb" strokeWidth={3} dot={(props) => {
+                    <Tooltip formatter={(v, name) => [formatUsd(Number(v)), name === 'btcPrice' ? 'BTC Price' : 'Avg Buy Price']} labelFormatter={l => `Date: ${l}`} />
+                    <Line type="monotone" dataKey="btcPrice"     name="BTC Price"    stroke="#f97316" strokeWidth={3} dot={false} />
+                    <Line type="stepAfter" dataKey="avgBuyPrice" name="Avg Buy Price" stroke="#2563eb" strokeWidth={2} connectNulls dot={(props) => {
                       const { cx, cy, payload } = props;
+                      if (!payload.bot) return null;
                       const color = payload.bot === 'DCA' ? '#6366f1' : '#ef4444';
                       return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={5} fill={color} stroke="#fff" strokeWidth={2} />;
                     }} />
@@ -120,6 +135,8 @@ export default function BtcSummaryDashboard() {
                 </ResponsiveContainer>
               </div>
               <div className="mt-3 flex items-center justify-center gap-6 text-sm text-slate-500">
+                <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-orange-400" /> BTC Price</div>
+                <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-blue-600" /> Avg Buy Price</div>
                 <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-500" /> DCA buy</div>
                 <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" /> Crash buy</div>
               </div>
