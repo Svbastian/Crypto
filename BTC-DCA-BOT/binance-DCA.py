@@ -106,11 +106,23 @@ if should_buy:
     usdt_balance = balances.get('USDT', 0.0)
 
     if usdt_balance < quote_order_value:
+        # Save retry job so retry_buy.py can attempt again in 24h
+        retry_data = {
+            "quote_order_value": quote_order_value,
+            "base_unit": base_unit,
+            "total_weeks": total_weeks,
+            "skipped_weeks_at_failure": skipped_weeks,
+            "failed_at": datetime.utcnow().isoformat()
+        }
+        with open(os.path.join(SCRIPT_DIR, "retry.json"), "w") as f:
+            json.dump(retry_data, f, indent=2)
+
         subject = "❌ Binance DCA - Insufficient Balance"
         body = (
             f"Insufficient balance to execute buy.\n"
             f"Needed: ${quote_order_value:.2f}, Available: ${usdt_balance:.2f}\n"
-            f"BTC Units Attempted: {total_to_buy}"
+            f"BTC Units Attempted: {total_to_buy}\n\n"
+            f"A retry has been scheduled for 24h from now."
         )
         send_email(subject, body)
         print(subject)

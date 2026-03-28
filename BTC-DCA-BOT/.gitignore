@@ -1,4 +1,5 @@
 .env
 buy_log.json
 retained.json
+retry.json
 __pycache__/
