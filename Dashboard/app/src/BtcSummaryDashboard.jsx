@@ -1,14 +1,39 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
+import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, RefreshCw } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { dcaBuyEvents, crashBuyEvents, btcPriceSeries, CURRENT_BTC_PRICE } from './data/botData';
+import { useLiveData } from './hooks/useLiveData';
 
 export default function BtcSummaryDashboard() {
+  const { data: liveData, loading, error, lastUpdated, refresh } = useLiveData();
+
+  // Normalize live DCA log entries to match botData shape
+  const normalizeDca = (e) => ({
+    date:       (e.timestamp || '').slice(0, 10),
+    price:      e.price,
+    usdtSpent:  e.usdt_spent,
+    trigger:    e.units_requested ? `${e.units_requested}× buy` : 'buy',
+    multiplier: e.units_requested || 1,
+  });
+
+  const normalizeCrash = (e) => ({
+    date:     (e.timestamp || '').slice(0, 10),
+    price:    e.price,
+    usdtSpent: e.usdt_spent,
+    dipPct:   e.dip_pct || 0,
+    tier:     e.tier || 'Crash buy',
+    units:    e.units_requested || 1,
+  });
+
+  const activeDca   = (liveData?.dcaBuys?.length   > 0) ? liveData.dcaBuys.map(normalizeDca)     : dcaBuyEvents;
+  const activeCrash = (liveData?.crashBuys?.length > 0) ? liveData.crashBuys.map(normalizeCrash) : crashBuyEvents;
+  const currentPrice = liveData?.btcPrice || CURRENT_BTC_PRICE;
+  const isLive = liveData?.dcaBuys?.length > 0 || liveData?.crashBuys?.length > 0;
 
   const stats = useMemo(() => {
-    const dcaEnriched   = dcaBuyEvents.map(e   => ({ ...e, btcBought: e.usdtSpent / e.price,   bot: 'DCA'   }));
-    const crashEnriched = crashBuyEvents.map(e => ({ ...e, btcBought: e.usdtSpent / e.price,   bot: 'Crash' }));
+    const dcaEnriched   = activeDca.map(e   => ({ ...e, btcBought: e.usdtSpent / e.price, bot: 'DCA'   }));
+    const crashEnriched = activeCrash.map(e => ({ ...e, btcBought: e.usdtSpent / e.price, bot: 'Crash' }));
     const all = [...dcaEnriched, ...crashEnriched].sort((a, b) => a.date.localeCompare(b.date));
 
     const dcaInvested   = dcaEnriched.reduce((s, e)   => s + e.usdtSpent, 0);
@@ -20,7 +45,7 @@ export default function BtcSummaryDashboard() {
     const totalBtc = dcaBtc + crashBtc;
 
     const avgBuyPrice   = totalInvested / totalBtc;
-    const positionValue = totalBtc * CURRENT_BTC_PRICE;
+    const positionValue = totalBtc * currentPrice;
     const pnl           = positionValue - totalInvested;
     const pnlPct        = (pnl / totalInvested) * 100;
 
@@ -61,7 +86,7 @@ export default function BtcSummaryDashboard() {
     ];
 
     return { totalInvested, totalBtc, avgBuyPrice, positionValue, pnl, pnlPct, dcaInvested, crashInvested, dcaBtc, crashBtc, avgLine, monthlyChart, contribution, all };
-  }, []);
+  }, [activeDca, activeCrash, currentPrice]);
 
   const formatUsd = v => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v);
   const formatBtc = v => `${v.toFixed(6)} BTC`;
@@ -86,11 +111,22 @@ export default function BtcSummaryDashboard() {
       <div className="mx-auto max-w-7xl space-y-6">
 
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Combined Summary</h1>
-          <p className="mt-1 text-slate-600">
-            Overall performance across both the DCA bot and Crash bot — {stats.all.length} total buys.
-          </p>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Combined Summary</h1>
+            <p className="mt-1 text-slate-600">
+              Overall performance across both the DCA bot and Crash bot — {stats.all.length} total buys.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            {loading && <span className="text-slate-400">Fetching live data…</span>}
+            {error   && <span className="text-amber-500">⚠ API offline — showing mock data</span>}
+            {isLive  && <span className="flex items-center gap-1.5 text-emerald-600"><span className="inline-block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Live data</span>}
+            {lastUpdated && <span className="text-slate-400">Updated {lastUpdated.toLocaleTimeString()}</span>}
+            <button onClick={refresh} className="rounded-lg bg-slate-100 p-2 hover:bg-slate-200 transition" title="Refresh">
+              <RefreshCw className="h-4 w-4 text-slate-600" />
+            </button>
+          </div>
         </div>
 
         {/* Top stat cards */}
