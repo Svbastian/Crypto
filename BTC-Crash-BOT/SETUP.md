@@ -1,4 +1,4 @@
-# Crash Bot — Raspberry Pi Setup
+# Crash Bot — Setup Guide
 
 ## 1. Clone & navigate
 
@@ -20,7 +20,20 @@ cp ../BTC-DCA-BOT/.env.example .env
 nano .env
 ```
 
-(Same credentials as the DCA bot — you can reuse them.)
+Fill in your values:
+
+```
+BINANCE_API_KEY=your_binance_api_key
+BINANCE_API_SECRET=your_binance_api_secret
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASSWORD=your_gmail_app_password
+EMAIL_RECEIVER=receiver@email.com
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=465
+```
+
+> For Gmail use an **App Password**, not your regular password.
+> Generate one at: Google Account → Security → 2-Step Verification → App Passwords
 
 ## 4. Create data files
 
@@ -29,11 +42,13 @@ echo '{"last_buy_at": null}' > crash_state.json
 echo '[]' > crash_log.json
 ```
 
-## 5. Cron setup
+## 5. Set up cron job
 
 ```bash
 crontab -e
 ```
+
+Add this line (replace path with your actual path):
 
 ```
 # Crash bot — checks every hour
@@ -42,23 +57,26 @@ crontab -e
 
 ## How it works
 
-| Condition | Units | USDT spent |
-|---|---|---|
-| Price < MA30 AND dip ≥ -7% from 7d high  | 1x   | $25     |
-| Price < MA30 AND dip ≥ -10% from 7d high | 2x   | $50     |
-| Price < MA30 AND dip ≥ -15% from 7d high | 3x   | $75     |
-| Price < MA30 AND dip ≥ -20% from 7d high | 4.5x | $112.50 |
+**MA30 filter** — if price is above the 30-day moving average the bot does nothing. This prevents buying dips during bull runs when the price is already elevated.
 
-- **MA30 filter**: skips buy entirely if price is above MA30 (prevents buying during bull run dips)
-- **48h cooldown**: after any buy, bot waits 48h before buying again
-- Runs hourly via cron
+**Tiers** — based on how far price has dropped from the 7-day high:
+
+| Dip from 7d high | Units | USDT spent |
+|---|---|---|
+| ≥ -10% | 2x | $50 |
+| ≥ -15% | 3x | $75 |
+| ≥ -20% | 4.5x | $112.50 |
+
+**48h cooldown** — after any buy the bot waits 48 hours before buying again.
+
+**Typical dip timeline** — based on 3 years of hourly data, a -10% dip from the 7d high takes a median of 11 days to develop, so the hourly check will always catch it in time.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `crash_bot.py` | Main bot, runs hourly |
-| `crash_state.json` | Tracks last buy timestamp for cooldown |
+| `crash_bot.py` | Main bot, runs every hour via cron |
+| `crash_state.json` | Tracks last buy time for cooldown |
 | `crash_log.json` | Full purchase history |
-| `dip_research.py` | Research script (not needed for production) |
-| `.env` | API keys and email credentials (never committed) |
+| `dip_research.py` | Research script used to calibrate tiers — not needed in production |
+| `.env` | API keys and email credentials (never committed to git) |
