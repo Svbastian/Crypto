@@ -1,0 +1,4 @@
+.env
+buy_log.json
+retained.json
+__pycache__/
