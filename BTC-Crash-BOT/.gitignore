@@ -1,0 +1,4 @@
+.env
+crash_log.json
+crash_state.json
+__pycache__/
