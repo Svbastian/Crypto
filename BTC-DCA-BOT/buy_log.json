@@ -1,0 +1,93 @@
+[
+  {
+    "timestamp": "2025-08-26T23:08:00.000000",
+    "btc_bought": 0.00022,
+    "price": 111248.75,
+    "usdt_spent": 24.48,
+    "units_requested": 1.0
+  },
+  {
+    "timestamp": "2025-09-01T09:00:00.000000",
+    "btc_bought": 0.00023,
+    "price": 108064.76,
+    "usdt_spent": 24.86,
+    "units_requested": 1.0
+  },
+  {
+    "timestamp": "2025-09-22T09:00:00.000000",
+    "btc_bought": 0.00044,
+    "price": 112771.83,
+    "usdt_spent": 49.61,
+    "units_requested": 2.0
+  },
+  {
+    "timestamp": "2025-10-20T21:02:00.000000",
+    "btc_bought": 0.00045,
+    "price": 110888.64,
+    "usdt_spent": 49.9,
+    "units_requested": 2.0
+  },
+  {
+    "timestamp": "2025-11-04T22:38:00.000000",
+    "btc_bought": 0.0005,
+    "price": 99015.41,
+    "usdt_spent": 49.55,
+    "units_requested": 2.0
+  },
+  {
+    "timestamp": "2025-11-17T09:00:00.000000",
+    "btc_bought": 0.00026,
+    "price": 95658.54,
+    "usdt_spent": 24.88,
+    "units_requested": 1.0
+  },
+  {
+    "timestamp": "2025-12-01T09:00:00.000000",
+    "btc_bought": 0.00028,
+    "price": 86535.53,
+    "usdt_spent": 24.22,
+    "units_requested": 1.0
+  },
+  {
+    "timestamp": "2025-12-29T09:00:00.000000",
+    "btc_bought": 0.00097,
+    "price": 89622.0,
+    "usdt_spent": 86.94,
+    "units_requested": 3.5
+  },
+  {
+    "timestamp": "2026-01-19T09:00:00.000000",
+    "btc_bought": 0.00026,
+    "price": 92836.98,
+    "usdt_spent": 24.13,
+    "units_requested": 1.0
+  },
+  {
+    "timestamp": "2026-03-09T09:00:00.000000",
+    "btc_bought": 0.00037,
+    "price": 67566.2,
+    "usdt_spent": 24.99,
+    "units_requested": 1.0
+  },
+  {
+    "timestamp": "2026-03-16T09:00:00.000000",
+    "btc_bought": 0.00119,
+    "price": 73468.54,
+    "usdt_spent": 87.46,
+    "units_requested": 3.5
+  },
+  {
+    "timestamp": "2026-03-23T09:00:00.000000",
+    "btc_bought": 0.00036,
+    "price": 68365.24,
+    "usdt_spent": 24.61,
+    "units_requested": 1.0
+  },
+  {
+    "timestamp": "2026-03-30T09:00:00.000000",
+    "btc_bought": 0.00037,
+    "price": 67283.29,
+    "usdt_spent": 24.9,
+    "units_requested": 1.0
+  }
+]
