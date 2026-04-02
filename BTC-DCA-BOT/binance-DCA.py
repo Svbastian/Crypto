@@ -74,18 +74,23 @@ print(f"200-day MA: ${ma_200:.2f}")
 should_buy = False
 base_unit = 0
 
+trigger_label = None
 if btc_price < ma_7:
     should_buy = True
     base_unit = 1
+    trigger_label = "7d MA"
 elif btc_price < ma_30:
     should_buy = True
     base_unit = 2
+    trigger_label = "30d MA"
 elif btc_price < ma_100:
     should_buy = True
     base_unit = 3
+    trigger_label = "100d MA"
 elif btc_price < ma_200:
     should_buy = True
     base_unit = 4.5
+    trigger_label = "200d MA"
 
 # === Load Skipped Weeks ===
 try:
@@ -149,7 +154,11 @@ if should_buy:
                 "btc_bought": executed_qty,
                 "price": btc_price,
                 "usdt_spent": cummulative_quote,
-                "units_requested": total_to_buy
+                "units_requested": total_to_buy,
+                "trigger": trigger_label,
+                "retainedWeeksIncluded": total_weeks,
+                "multiplier": base_unit,
+                "formula": f"{total_weeks} × 25 × {base_unit}"
             }
             try:
                 with open(LOG_FILE, "r+") as f:

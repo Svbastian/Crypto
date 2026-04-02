@@ -4,18 +4,21 @@ import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, CalendarClock, Layers, Repeat, ListOrdered, BarChart3 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-export default function BtcDcaDashboard({ liveData = null }) {
+export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
   const [activeTab, setActiveTab] = useState('overview');
 
   // If live data is provided, derive real stats from buy_log.json entries
   const liveStats = useMemo(() => {
     if (!liveData?.dcaBuys?.length) return null;
     const buys = liveData.dcaBuys.map(e => ({
-      date:       (e.timestamp || '').slice(0, 10),
-      price:      e.price,
-      usdtSpent:  e.usdt_spent,
-      btcBought:  e.btc_bought,
-      trigger:    e.units_requested ? `${e.units_requested}× buy` : 'buy',
+      date:                  (e.timestamp || e.time || '').slice(0, 10),
+      price:                 e.price,
+      usdtSpent:             e.usdt_spent ?? e.usdtSpent ?? 0,
+      btcBought:             e.btc_bought ?? e.btcBought ?? 0,
+      trigger:               e.trigger || (e.units_requested ? `${e.units_requested}× buy` : 'buy'),
+      retainedWeeksIncluded: e.retainedWeeksIncluded ?? null,
+      multiplier:            e.multiplier ?? null,
+      formulaText:           e.formula ?? null,
     }));
     const totalInvested = buys.reduce((s, e) => s + e.usdtSpent, 0);
     const totalBtc      = buys.reduce((s, e) => s + e.btcBought, 0);
@@ -24,7 +27,10 @@ export default function BtcDcaDashboard({ liveData = null }) {
     const positionValue = totalBtc * currentPrice;
     const pnl           = positionValue - totalInvested;
     const pnlPct        = (pnl / totalInvested) * 100;
-    return { buys, totalInvested, totalBtc, avgBuyPrice, positionValue, pnl, pnlPct, currentPrice };
+    const triggerCounts = { '7d MA': 0, '30d MA': 0, '100d MA': 0, '200d MA': 0 };
+    buys.forEach(b => { if (b.trigger in triggerCounts) triggerCounts[b.trigger]++; });
+    const latestBuy = buys[buys.length - 1];
+    return { buys, totalInvested, totalBtc, avgBuyPrice, positionValue, pnl, pnlPct, currentPrice, triggerCounts, latestBuy };
   }, [liveData]);
 
   const BASE_UNIT = 25;
@@ -257,13 +263,17 @@ export default function BtcDcaDashboard({ liveData = null }) {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">BTC DCA Dashboard</h1>
             <p className="mt-1 text-slate-600">
-              Mock simulation of your BTC bot with a 25 USD base unit, buy gating below the 7d MA, dynamic sizing by moving average depth, and retained weeks rolled into the next executed order.
+              {isLive
+                ? 'Live data from your DCA bot — real buys, real prices, real performance.'
+                : 'Mock simulation of your BTC bot with a 25 USD base unit, buy gating below the 7d MA, dynamic sizing by moving average depth, and retained weeks rolled into the next executed order.'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <Badge className="rounded-full px-3 py-1 text-sm">{simulation.buysCount} executed buys</Badge>
+            <Badge className="rounded-full px-3 py-1 text-sm">
+              {liveStats ? liveStats.buys.length : simulation.buysCount} executed buys
+            </Badge>
             <Badge variant="secondary" className="rounded-full px-3 py-1 text-sm">
-              Current BTC: {formatUsd(simulation.currentPrice)}
+              Current BTC: {formatUsd(liveStats ? liveStats.currentPrice : simulation.currentPrice)}
             </Badge>
           </div>
         </div>
@@ -298,7 +308,7 @@ export default function BtcDcaDashboard({ liveData = null }) {
                 <CardContent>
                   <div className="h-[380px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={simulation.chartData}>
+                      <LineChart data={liveData?.chartData || simulation.chartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(value) => value.slice(2)} />
                         <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `$${Math.round(value / 1000)}k`} domain={['dataMin - 4000', 'dataMax + 4000']} />
@@ -321,11 +331,13 @@ export default function BtcDcaDashboard({ liveData = null }) {
                     <CardTitle className="text-lg">Latest Buy</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm text-slate-700">
-                    <div className="flex items-center justify-between"><span>BTC Bought</span><span className="font-medium">{formatBtc(simulation.latestBuy.btcBought)}</span></div>
-                    <div className="flex items-center justify-between"><span>Price</span><span className="font-medium">{formatUsd(simulation.latestBuy.price)}</span></div>
-                    <div className="flex items-center justify-between"><span>USDT Spent</span><span className="font-medium">{formatUsd(simulation.latestBuy.usdtSpent)}</span></div>
-                    <div className="flex items-center justify-between"><span>Retained Weeks</span><span className="font-medium">{simulation.latestBuy.retainedWeeksIncluded}</span></div>
-                    <div className="flex items-center justify-between"><span>Trigger</span><span className="font-medium">{simulation.latestBuy.trigger}</span></div>
+                  {(() => { const lb = liveStats?.latestBuy || simulation.latestBuy; return (<>
+                    <div className="flex items-center justify-between"><span>BTC Bought</span><span className="font-medium">{formatBtc(lb.btcBought)}</span></div>
+                    <div className="flex items-center justify-between"><span>Price</span><span className="font-medium">{formatUsd(lb.price)}</span></div>
+                    <div className="flex items-center justify-between"><span>USDT Spent</span><span className="font-medium">{formatUsd(lb.usdtSpent)}</span></div>
+                    <div className="flex items-center justify-between"><span>Retained Weeks</span><span className="font-medium">{lb.retainedWeeksIncluded ?? 0}</span></div>
+                    <div className="flex items-center justify-between"><span>Trigger</span><span className="font-medium">{lb.trigger ?? '—'}</span></div>
+                  </>); })()}
                   </CardContent>
                 </Card>
 
@@ -334,7 +346,7 @@ export default function BtcDcaDashboard({ liveData = null }) {
                     <CardTitle className="text-lg">Algorithm Trigger Mix</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm text-slate-700">
-                    {Object.entries(simulation.triggerCounts).map(([label, count]) => (
+                    {Object.entries((liveStats || simulation).triggerCounts).map(([label, count]) => (
                       <div key={label} className="flex items-center justify-between">
                         <span>{label}</span>
                         <span className="font-medium">{count}</span>
@@ -348,10 +360,17 @@ export default function BtcDcaDashboard({ liveData = null }) {
                     <CardTitle className="text-lg">Retention Summary</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm text-slate-700">
-                    <div className="flex items-center justify-between"><span>Skipped Periods</span><span className="font-medium">{simulation.skippedPeriods}</span></div>
-                    <div className="flex items-center justify-between"><span>Rolled Forward Weeks</span><span className="font-medium">{simulation.totalWeeksRolledForward}</span></div>
-                    <div className="flex items-center justify-between"><span>Pending Retention</span><span className="font-medium">{formatUsd(simulation.pendingRetentionUsd)}</span></div>
-                    <div className="flex items-center justify-between"><span>Base Unit</span><span className="font-medium">{formatUsd(BASE_UNIT)}</span></div>
+                    {liveStats ? (<>
+                      <div className="flex items-center justify-between"><span>Pending Weeks</span><span className="font-medium">{liveData?.skippedWeeks ?? 0}</span></div>
+                      <div className="flex items-center justify-between"><span>Pending USDT</span><span className="font-medium">{formatUsd((liveData?.skippedWeeks ?? 0) * BASE_UNIT)}</span></div>
+                      <div className="flex items-center justify-between"><span>Total Buys</span><span className="font-medium">{liveStats.buys.length}</span></div>
+                      <div className="flex items-center justify-between"><span>Base Unit</span><span className="font-medium">{formatUsd(BASE_UNIT)}</span></div>
+                    </>) : (<>
+                      <div className="flex items-center justify-between"><span>Skipped Periods</span><span className="font-medium">{simulation.skippedPeriods}</span></div>
+                      <div className="flex items-center justify-between"><span>Rolled Forward Weeks</span><span className="font-medium">{simulation.totalWeeksRolledForward}</span></div>
+                      <div className="flex items-center justify-between"><span>Pending Retention</span><span className="font-medium">{formatUsd(simulation.pendingRetentionUsd)}</span></div>
+                      <div className="flex items-center justify-between"><span>Base Unit</span><span className="font-medium">{formatUsd(BASE_UNIT)}</span></div>
+                    </>)}
                   </CardContent>
                 </Card>
               </div>
@@ -368,7 +387,7 @@ export default function BtcDcaDashboard({ liveData = null }) {
                 <CardContent>
                   <div className="h-[380px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={simulation.chartData}>
+                      <LineChart data={liveData?.chartData || simulation.chartData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(value) => value.slice(2)} />
                         <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `$${Math.round(value / 1000)}k`} domain={['dataMin - 4000', 'dataMax + 4000']} />
@@ -385,6 +404,7 @@ export default function BtcDcaDashboard({ liveData = null }) {
                 </CardContent>
               </Card>
 
+              {!liveStats && (
               <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
                 <CardHeader>
                   <CardTitle className="text-lg">How the Mock Logic Was Simulated</CardTitle>
@@ -396,6 +416,7 @@ export default function BtcDcaDashboard({ liveData = null }) {
                   <div className="flex items-start gap-2"><Target className="mt-0.5 h-4 w-4 text-slate-500" /><span>Executed amount = retained weeks included × 25 USD × active multiplier.</span></div>
                 </CardContent>
               </Card>
+              )}
             </div>
           </>
         )}
@@ -432,8 +453,8 @@ export default function BtcDcaDashboard({ liveData = null }) {
                             {buy.trigger}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{buy.retainedWeeksIncluded ?? '—'}</td>
-                        <td className="px-4 py-3 text-slate-700">{buy.multiplier != null ? `${buy.multiplier}x` : '—'}</td>
+                        <td className="px-4 py-3 text-slate-700">{buy.retainedWeeksIncluded ?? 0}</td>
+                        <td className="px-4 py-3 text-slate-700">{buy.multiplier != null ? `${buy.multiplier}x` : 0}</td>
                         <td className="px-4 py-3 font-mono text-xs text-slate-600">{buy.formulaText ?? '—'}</td>
                         <td className="px-4 py-3 text-slate-700">{formatUsd(buy.price)}</td>
                         <td className="px-4 py-3 font-medium text-slate-900">{formatUsd(buy.usdtSpent)}</td>

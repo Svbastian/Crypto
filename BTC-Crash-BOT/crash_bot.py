@@ -149,12 +149,13 @@ try:
 
     # === Log ===
     log_entry = {
-        "timestamp":   datetime.utcnow().isoformat(),
-        "tier":        triggered_tier["label"],
-        "dip_pct":     round(dip_pct, 2),
-        "btc_bought":  executed_qty,
-        "price":       btc_price,
-        "usdt_spent":  cummulative_quote,
+        "timestamp":      datetime.utcnow().isoformat(),
+        "tier":           triggered_tier["label"],
+        "dip_pct":        round(dip_pct, 2),
+        "units_requested": triggered_tier["units"],
+        "btc_bought":     executed_qty,
+        "price":          btc_price,
+        "usdt_spent":     cummulative_quote,
     }
     try:
         with open(LOG_FILE, "r+") as f:

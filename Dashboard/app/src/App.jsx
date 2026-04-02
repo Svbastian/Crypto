@@ -56,9 +56,9 @@ export default function App() {
         </button>
       </div>
 
-      {active === 'summary' && <BtcSummaryDashboard liveData={liveData} />}
-      {active === 'dca'     && <BtcDcaDashboard     liveData={liveData} />}
-      {active === 'crash'   && <BtcCrashDashboard   liveData={liveData} />}
+      {active === 'summary' && <BtcSummaryDashboard liveData={liveData} isLive={isLive} />}
+      {active === 'dca'     && <BtcDcaDashboard     liveData={liveData} isLive={isLive} />}
+      {active === 'crash'   && <BtcCrashDashboard   liveData={liveData} isLive={isLive} />}
     </>
   )
 }
