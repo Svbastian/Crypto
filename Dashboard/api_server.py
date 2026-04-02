@@ -7,10 +7,12 @@ import json
 import os
 from datetime import datetime, timezone
 import requests
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 
-app = Flask(__name__)
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app', 'dist')
+
+app = Flask(__name__, static_folder=STATIC_DIR, static_url_path='')
 CORS(app)
 
 BASE_DIR         = os.path.dirname(os.path.abspath(__file__))
@@ -139,6 +141,15 @@ def data():
 @app.route('/api/health')
 def health():
     return jsonify({'status': 'ok'})
+
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    target = os.path.join(STATIC_DIR, path)
+    if path and os.path.exists(target):
+        return send_from_directory(STATIC_DIR, path)
+    return send_from_directory(STATIC_DIR, 'index.html')
 
 
 if __name__ == '__main__':
