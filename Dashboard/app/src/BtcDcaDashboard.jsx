@@ -292,7 +292,7 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
                 <CardContent>
                   <div className="h-[380px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={filterByRange(isLive ? (liveData?.chartData || []) : simulation.chartData)}>
+                      <LineChart data={filterByRange(liveData?.chartData || simulation.chartData)}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={xFmt} interval={xInterval} />
                         <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `$${Math.round(value / 1000)}k`} domain={['dataMin - 4000', 'dataMax + 4000']} />
@@ -376,7 +376,7 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
                 <CardContent>
                   <div className="h-[380px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={filterByRange(isLive ? (liveData?.chartData || []) : simulation.chartData)}>
+                      <LineChart data={filterByRange(liveData?.chartData || simulation.chartData)}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={xFmt} interval={xInterval} />
                         <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `$${Math.round(value / 1000)}k`} domain={['dataMin - 4000', 'dataMax + 4000']} />

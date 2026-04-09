@@ -30,6 +30,27 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
   );
   const currentPrice = liveData?.btcPrice || 71900;
 
+  // Live buy log from real ATH-DCA bot
+  const liveStats = useMemo(() => {
+    if (!liveData?.athBuys?.length) return null;
+    const buys = liveData.athBuys.map(e => ({
+      date:      (e.timestamp || '').slice(0, 10),
+      price:     e.price,
+      usdtSpent: e.usdt_spent,
+      btcBought: e.btc_bought,
+      ath:       e.rolling_ath,
+      dip:       e.dip_pct,
+      buySize:   e.buy_amount,
+    }));
+    const totalInvested = buys.reduce((s, e) => s + e.usdtSpent, 0);
+    const totalBtc      = buys.reduce((s, e) => s + e.btcBought, 0);
+    const avgBuyPrice   = totalBtc > 0 ? totalInvested / totalBtc : 0;
+    const positionValue = totalBtc * currentPrice;
+    const pnl           = positionValue - totalInvested;
+    const pnlPct        = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
+    return { buys, totalInvested, totalBtc, avgBuyPrice, positionValue, pnl, pnlPct };
+  }, [liveData, currentPrice]);
+
   const xFmt = v => {
     const [, m, d] = v.split('-');
     const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -150,7 +171,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
         {/* Tabs */}
         <div className="flex flex-wrap gap-3">
           <TabButton id="overview" label="Overview"  icon={BarChart3}  />
-          {!isLive && <TabButton id="log" label="Buy Log" icon={ListOrdered} />}
+          <TabButton id="log" label="Buy Log" icon={ListOrdered} />
         </div>
 
         {activeTab === 'overview' && (<>
@@ -180,21 +201,25 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
           </CardContent>
         </Card>
 
-        {/* Stat cards — demo only (backtest results) */}
-        {!isLive && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard title="BTC Accumulated"  value={formatBtc(sim.totalBtc)}      subtitle={`${sim.buyEvents.length} buys over 4yr backtest`} icon={Bitcoin} />
-          <StatCard title="Avg Buy Price"    value={formatUsd(sim.avgBuyPrice)}   subtitle="weighted average across all simulated buys" icon={Target} />
-          <StatCard title="Position Value"   value={formatUsd(sim.positionValue)} subtitle={`at current ${formatUsd(currentPrice)}`} icon={Wallet} />
-          <StatCard
-            title="Backtest P/L"
-            value={formatUsd(sim.pnl)}
-            valueClassName={sim.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}
-            subtitle={`${sim.pnlPct >= 0 ? '+' : ''}${sim.pnlPct.toFixed(1)}% vs ${formatUsd(sim.totalInvested)} invested`}
-            icon={sim.pnl >= 0 ? TrendingUp : TrendingDown}
-          />
-        </div>
-        )}
+        {/* Stat cards — live: real buys; demo: backtest simulation */}
+        {(() => {
+          const s = isLive ? liveStats : sim;
+          const noBuys = !s || (isLive && !liveStats);
+          return (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <StatCard title="BTC Accumulated"  value={noBuys ? '—' : formatBtc(s.totalBtc)}      subtitle={noBuys ? 'No live buys yet' : isLive ? `${liveStats.buys.length} live buys` : `${sim.buyEvents.length} buys over 4yr backtest`} icon={Bitcoin} />
+              <StatCard title="Avg Buy Price"    value={noBuys ? '—' : formatUsd(s.avgBuyPrice)}   subtitle="weighted average across all buys" icon={Target} />
+              <StatCard title="Position Value"   value={noBuys ? '—' : formatUsd(s.positionValue)} subtitle={`at current ${formatUsd(currentPrice)}`} icon={Wallet} />
+              <StatCard
+                title={isLive ? 'Profit / Loss' : 'Backtest P/L'}
+                value={noBuys ? '—' : formatUsd(s.pnl)}
+                valueClassName={noBuys ? 'text-slate-400' : s.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}
+                subtitle={noBuys ? 'No buys yet' : `${s.pnlPct >= 0 ? '+' : ''}${s.pnlPct.toFixed(1)}% vs ${formatUsd(s.totalInvested)} invested`}
+                icon={noBuys || s.pnl >= 0 ? TrendingUp : TrendingDown}
+              />
+            </div>
+          );
+        })()}
 
         {/* Buy curve + price chart */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -250,8 +275,8 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
             </CardContent>
           </Card>
 
-          {/* Price vs ATH — demo only (backtest history) */}
-          {!isLive && <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
+          {/* Price vs ATH — real history (backtest data used as reference in both modes) */}
+          <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -287,7 +312,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
                 </ResponsiveContainer>
               </div>
             </CardContent>
-          </Card>}
+          </Card>
         </div>
 
         {/* Algorithm config */}
@@ -317,46 +342,57 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
 
         </>)}
 
-        {activeTab === 'log' && (
-          <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
-            <CardHeader>
-              <CardTitle className="text-lg">Simulated Buy Log — 4yr Backtest</CardTitle>
-              <p className="text-sm text-slate-500">Real BTC prices, real algorithm. What would have been bought weekly since {sim.enriched[0]?.date}.</p>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="border-b border-slate-200 text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Week</th>
-                      <th className="px-4 py-3 font-medium">BTC Price</th>
-                      <th className="px-4 py-3 font-medium">Rolling ATH</th>
-                      <th className="px-4 py-3 font-medium">Dip from ATH</th>
-                      <th className="px-4 py-3 font-medium">USDT Spent</th>
-                      <th className="px-4 py-3 font-medium">BTC Bought</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sim.buyEvents.map((e, i) => (
-                      <tr key={e.date} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                        <td className="px-4 py-3 text-slate-700">{e.date}</td>
-                        <td className="px-4 py-3 text-slate-700">{formatUsd(e.price)}</td>
-                        <td className="px-4 py-3 text-slate-500">{formatUsd(e.ath)}</td>
-                        <td className="px-4 py-3">
-                          <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
-                            -{e.dip.toFixed(1)}%
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-medium text-slate-900">{formatUsd(e.buySize)}</td>
-                        <td className="px-4 py-3 text-slate-700">{formatBtc(e.btc)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {activeTab === 'log' && (() => {
+          const logEntries = isLive ? (liveStats?.buys || []) : sim.buyEvents;
+          const title = isLive ? 'Live Buy Log' : 'Simulated Buy Log — 4yr Backtest';
+          const subtitle = isLive
+            ? `${logEntries.length} real buys from ATH-DCA bot`
+            : `Real BTC prices, real algorithm. What would have been bought weekly since ${sim.enriched[0]?.date}.`;
+          return (
+            <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
+              <CardHeader>
+                <CardTitle className="text-lg">{title}</CardTitle>
+                <p className="text-sm text-slate-500">{subtitle}</p>
+              </CardHeader>
+              <CardContent>
+                {logEntries.length === 0 ? (
+                  <p className="py-8 text-center text-slate-400 text-sm">No ATH-DCA buys recorded yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="border-b border-slate-200 text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3 font-medium">{isLive ? 'Date' : 'Week'}</th>
+                          <th className="px-4 py-3 font-medium">BTC Price</th>
+                          <th className="px-4 py-3 font-medium">Rolling ATH</th>
+                          <th className="px-4 py-3 font-medium">Dip from ATH</th>
+                          <th className="px-4 py-3 font-medium">USDT Spent</th>
+                          <th className="px-4 py-3 font-medium">BTC Bought</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {logEntries.map((e, i) => (
+                          <tr key={e.date + i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                            <td className="px-4 py-3 text-slate-700">{e.date}</td>
+                            <td className="px-4 py-3 text-slate-700">{formatUsd(e.price)}</td>
+                            <td className="px-4 py-3 text-slate-500">{formatUsd(e.ath)}</td>
+                            <td className="px-4 py-3">
+                              <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
+                                -{(isLive ? e.dip : e.dip).toFixed(1)}%
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-medium text-slate-900">{formatUsd(e.usdtSpent || e.buySize)}</td>
+                            <td className="px-4 py-3 text-slate-700">{formatBtc(e.btcBought || e.btc)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
 
       </div>
     </div>
