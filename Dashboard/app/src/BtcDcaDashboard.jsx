@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, CalendarClock, Layers, Repeat, ListOrdered, BarChart3 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { dcaBacktestWeekly } from './data/dcaBacktestData';
 
 export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -65,54 +66,8 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
     ma200: 4.5,
   };
 
-  const marketSeries = [
-    { date: '2024-05-06', btcPrice: 64200, ma7: 65100, ma30: 63400, ma100: 59800, ma200: 52200 },
-    { date: '2024-05-20', btcPrice: 66800, ma7: 66000, ma30: 64200, ma100: 60500, ma200: 52800 },
-    { date: '2024-06-03', btcPrice: 69400, ma7: 68100, ma30: 65500, ma100: 61400, ma200: 53600 },
-    { date: '2024-06-17', btcPrice: 67100, ma7: 68200, ma30: 66600, ma100: 62100, ma200: 54400 },
-    { date: '2024-07-01', btcPrice: 62900, ma7: 64800, ma30: 66200, ma100: 62600, ma200: 55100 },
-    { date: '2024-07-15', btcPrice: 61100, ma7: 62500, ma30: 65100, ma100: 62900, ma200: 55800 },
-    { date: '2024-07-29', btcPrice: 65400, ma7: 63900, ma30: 64600, ma100: 63200, ma200: 56600 },
-    { date: '2024-08-12', btcPrice: 59200, ma7: 61800, ma30: 63700, ma100: 62800, ma200: 57300 },
-    { date: '2024-08-26', btcPrice: 57700, ma7: 59400, ma30: 62100, ma100: 61900, ma200: 57900 },
-    { date: '2024-09-09', btcPrice: 60300, ma7: 59200, ma30: 61100, ma100: 61400, ma200: 58600 },
-    { date: '2024-09-23', btcPrice: 64100, ma7: 62200, ma30: 61500, ma100: 61600, ma200: 59400 },
-    { date: '2024-10-07', btcPrice: 68200, ma7: 66100, ma30: 62900, ma100: 62200, ma200: 60300 },
-    { date: '2024-10-21', btcPrice: 70400, ma7: 69100, ma30: 64600, ma100: 63100, ma200: 61200 },
-    { date: '2024-11-04', btcPrice: 73900, ma7: 72100, ma30: 67200, ma100: 64500, ma200: 62300 },
-    { date: '2024-11-18', btcPrice: 81200, ma7: 77900, ma30: 72100, ma100: 67200, ma200: 63600 },
-    { date: '2024-12-02', btcPrice: 89600, ma7: 86100, ma30: 78100, ma100: 71200, ma200: 65400 },
-    { date: '2024-12-16', btcPrice: 97800, ma7: 94200, ma30: 84600, ma100: 76400, ma200: 67200 },
-    { date: '2024-12-30', btcPrice: 101200, ma7: 99300, ma30: 90200, ma100: 81200, ma200: 68900 },
-    { date: '2025-01-13', btcPrice: 96300, ma7: 98500, ma30: 93400, ma100: 85000, ma200: 70300 },
-    { date: '2025-01-27', btcPrice: 91800, ma7: 94800, ma30: 94700, ma100: 87600, ma200: 71800 },
-    { date: '2025-02-10', btcPrice: 88100, ma7: 90600, ma30: 93600, ma100: 89200, ma200: 73100 },
-    { date: '2025-02-24', btcPrice: 84500, ma7: 86800, ma30: 91300, ma100: 89800, ma200: 74400 },
-    { date: '2025-03-10', btcPrice: 82400, ma7: 83900, ma30: 88900, ma100: 89400, ma200: 75600 },
-    { date: '2025-03-24', btcPrice: 85200, ma7: 84100, ma30: 87100, ma100: 88800, ma200: 76800 },
-    { date: '2025-04-07', btcPrice: 89600, ma7: 87200, ma30: 86700, ma100: 88600, ma200: 78100 },
-    { date: '2025-04-21', btcPrice: 93800, ma7: 91700, ma30: 87800, ma100: 89000, ma200: 79600 },
-    { date: '2025-05-05', btcPrice: 97300, ma7: 95500, ma30: 90100, ma100: 90100, ma200: 81100 },
-    { date: '2025-05-19', btcPrice: 101900, ma7: 98800, ma30: 93200, ma100: 92000, ma200: 82700 },
-    { date: '2025-06-02', btcPrice: 104800, ma7: 103200, ma30: 96100, ma100: 94300, ma200: 84300 },
-    { date: '2025-06-16', btcPrice: 108600, ma7: 106500, ma30: 99200, ma100: 97000, ma200: 86000 },
-    { date: '2025-06-30', btcPrice: 112800, ma7: 110700, ma30: 102600, ma100: 99800, ma200: 87800 },
-    { date: '2025-07-14', btcPrice: 109400, ma7: 111200, ma30: 105100, ma100: 101700, ma200: 89500 },
-    { date: '2025-07-28', btcPrice: 103700, ma7: 106800, ma30: 106100, ma100: 102600, ma200: 91200 },
-    { date: '2025-08-11', btcPrice: 97800, ma7: 101300, ma30: 104500, ma100: 102100, ma200: 92900 },
-    { date: '2025-08-25', btcPrice: 94800, ma7: 96800, ma30: 101600, ma100: 101100, ma200: 94300 },
-    { date: '2025-09-08', btcPrice: 99100, ma7: 97200, ma30: 100100, ma100: 100700, ma200: 95600 },
-    { date: '2025-09-22', btcPrice: 102700, ma7: 100900, ma30: 100000, ma100: 100800, ma200: 96800 },
-    { date: '2025-10-06', btcPrice: 107900, ma7: 105600, ma30: 101800, ma100: 101700, ma200: 98100 },
-    { date: '2025-10-20', btcPrice: 111600, ma7: 109800, ma30: 104900, ma100: 103400, ma200: 99400 },
-    { date: '2025-11-03', btcPrice: 116200, ma7: 114100, ma30: 108000, ma100: 105600, ma200: 100800 },
-    { date: '2025-11-17', btcPrice: 119400, ma7: 117200, ma30: 111600, ma100: 108400, ma200: 102300 },
-    { date: '2025-12-01', btcPrice: 114700, ma7: 117300, ma30: 113400, ma100: 110400, ma200: 103700 },
-    { date: '2025-12-15', btcPrice: 106900, ma7: 111200, ma30: 112600, ma100: 110900, ma200: 104900 },
-    { date: '2025-12-29', btcPrice: 98200, ma7: 102700, ma30: 109100, ma100: 110000, ma200: 105600 },
-    { date: '2026-01-12', btcPrice: 94100, ma7: 96600, ma30: 104700, ma100: 108700, ma200: 106100 },
-    { date: '2026-01-19', btcPrice: 92836.98, ma7: 94800, ma30: 101900, ma100: 107900, ma200: 106000 },
-  ];
+  // Real 2yr weekly backtest data — fetched from Binance, MAs computed from real daily history
+  const marketSeries = dcaBacktestWeekly;
 
   const simulation = useMemo(() => {
     let totalBtc = 0;
