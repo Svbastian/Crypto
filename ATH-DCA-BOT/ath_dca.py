@@ -1,6 +1,5 @@
 import os
 import json
-import math
 from datetime import datetime
 from dotenv import load_dotenv
 from binance.client import Client
@@ -25,9 +24,10 @@ email_receiver = os.getenv("EMAIL_RECEIVER")
 ATH_WINDOW_DAYS = 1825   # 5 years of daily candles
 MIN_DIP         = 0.15   # start buying at -15% below rolling ATH
 BASE_USDT       = 25.0   # minimum buy at trigger (-15%)
-MAX_USDT        = 1000.0 # theoretical max buy (approached logarithmically, never truly reached)
-# Scaling: logarithmic — aggressive gains in realistic -15% to -60% range,
-# flattens toward impossible levels (-90%+). Formula: ln(1+ratio)/ln(2)
+MAX_USDT        = 1000.0 # maximum buy (approached at extreme crashes ~-90%)
+POW_N           = 2.1    # power curve exponent — slow start, accelerates at deep crashes
+# Scaling: power curve ratio^2.1 — stays cheap at moderate dips (-30%: ~$50),
+# ramps hard at extreme crashes (-70%: ~$400, -90%: ~$775)
 
 # === Initialize Client ===
 client = Client(api_key, api_secret)
@@ -66,11 +66,10 @@ print(f"📉 Dip from ATH: {dip_pct * 100:.1f}%")
 if dip_pct < MIN_DIP:
     print(f"⏭️  Price is only {dip_pct * 100:.1f}% below ATH — below {MIN_DIP * 100:.0f}% threshold. No buy.")
 else:
-    # Logarithmic scaling: big gains in realistic dip range, flattens at extreme levels
-    LOG_K      = 10
+    # Power curve scaling: slow at moderate dips, accelerates hard at extreme crashes
     ratio      = min((dip_pct - MIN_DIP) / (1.0 - MIN_DIP), 1.0)
-    log_ratio  = math.log1p(ratio * LOG_K) / math.log1p(LOG_K)  # maps 0→0, 1→1 with strong log curve
-    buy_amount = BASE_USDT + log_ratio * (MAX_USDT - BASE_USDT)
+    pow_ratio  = ratio ** POW_N  # maps 0→0, 1→1 with slow start, fast end
+    buy_amount = BASE_USDT + pow_ratio * (MAX_USDT - BASE_USDT)
     buy_amount = round(buy_amount, 2)
 
     print(f"✅ Buy signal — ratio: {ratio:.2f}, buy size: ${buy_amount:.2f}")

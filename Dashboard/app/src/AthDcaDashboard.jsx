@@ -7,15 +7,15 @@ import { weeklyBacktest4yr } from './data/backtest4yr';
 // === Algorithm constants (must match ath_dca.py exactly) ===
 const MIN_DIP   = 0.15;   // trigger at -15% below rolling ATH
 const BASE_USDT = 25;     // buy size at trigger
-const MAX_USDT  = 500;    // maximum buy (at deep crashes)
-const LOG_K     = 10;     // logarithmic steepness — higher = steeper early curve
+const MAX_USDT  = 1000;   // maximum buy (approached at extreme crashes ~-90%)
+const POW_N     = 2.1;    // power curve exponent — slow start, accelerates at deep crashes
 
 function computeBuySize(price, ath) {
   const dip = (ath - price) / ath;
   if (dip < MIN_DIP) return null;
   const ratio    = Math.min((dip - MIN_DIP) / (1.0 - MIN_DIP), 1.0);
-  const logRatio = Math.log1p(ratio * LOG_K) / Math.log1p(LOG_K);
-  return Math.round(BASE_USDT + logRatio * (MAX_USDT - BASE_USDT));
+  const powRatio = Math.pow(ratio, POW_N);
+  return Math.round(BASE_USDT + powRatio * (MAX_USDT - BASE_USDT));
 }
 
 export default function AthDcaDashboard({ liveData = null, isLive = false }) {
@@ -117,13 +117,13 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
     return { enriched, buyEvents, totalInvested, totalBtc, positionValue, pnl, pnlPct, avgBuyPrice, currentAth, currentDip, currentBuySize };
   }, [currentPrice]);
 
-  // Buy curve — dip 0–90%, showing logarithmic shape
+  // Buy curve — dip 0–90%, showing power curve shape
   const buyCurve = useMemo(() => Array.from({ length: 91 }, (_, dipPct) => {
     const dip = dipPct / 100;
     if (dip < MIN_DIP) return { dip: dipPct, buySize: null };
     const ratio    = Math.min((dip - MIN_DIP) / (1.0 - MIN_DIP), 1.0);
-    const logRatio = Math.log1p(ratio * LOG_K) / Math.log1p(LOG_K);
-    return { dip: dipPct, buySize: Math.round(BASE_USDT + logRatio * (MAX_USDT - BASE_USDT)) };
+    const powRatio = Math.pow(ratio, POW_N);
+    return { dip: dipPct, buySize: Math.round(BASE_USDT + powRatio * (MAX_USDT - BASE_USDT)) };
   }), []);
 
   const filterByRange = arr => {
@@ -229,7 +229,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
             <CardHeader>
               <CardTitle className="text-lg">Buy Size vs Dip from ATH</CardTitle>
               <p className="text-sm text-slate-500">
-                Logarithmic curve — accelerates fast in the realistic -15% to -50% range, then flattens toward extreme levels. Green line = current position.
+                Power curve — stays cheap at moderate dips, accelerates hard at extreme crashes. Green line = current position.
               </p>
             </CardHeader>
             <CardContent>
@@ -327,8 +327,8 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
                 ['ATH Window', '5 years', '1,825 daily candles'],
                 ['Buy Trigger', '-15% from ATH', `currently ${formatUsd(sim.currentAth * 0.85)}`],
                 ['Min Buy', '$25', 'at exactly -15%'],
-                ['Max Buy', '$500', 'approached asymptotically'],
-                ['Curve', 'Logarithmic', `steepness k=${LOG_K}`],
+                ['Max Buy', '$1,000', 'approached at extreme crashes'],
+                ['Curve', 'Power curve', `exponent n=${POW_N}`],
               ].map(([label, val, sub]) => (
                 <div key={label} className="rounded-xl bg-slate-50 p-4">
                   <p className="text-xs text-slate-500">{label}</p>

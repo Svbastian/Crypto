@@ -8,15 +8,15 @@ import { weeklyBacktest4yr } from './data/backtest4yr';
 // ATH-DCA algorithm constants (must match ath_dca.py)
 const MIN_DIP_ATH = 0.15;
 const BASE_ATH    = 25;
-const MAX_ATH     = 500;
-const LOG_K_ATH   = 10;
+const MAX_ATH     = 1000;
+const POW_N_ATH   = 2.1;
 
 function computeAthBuySize(price, ath) {
   const dip = (ath - price) / ath;
   if (dip < MIN_DIP_ATH) return null;
   const ratio    = Math.min((dip - MIN_DIP_ATH) / (1.0 - MIN_DIP_ATH), 1.0);
-  const logRatio = Math.log1p(ratio * LOG_K_ATH) / Math.log1p(LOG_K_ATH);
-  return Math.round(BASE_ATH + logRatio * (MAX_ATH - BASE_ATH));
+  const powRatio = Math.pow(ratio, POW_N_ATH);
+  return Math.round(BASE_ATH + powRatio * (MAX_ATH - BASE_ATH));
 }
 
 export default function BtcSummaryDashboard({ liveData = null, isLive = false }) {
