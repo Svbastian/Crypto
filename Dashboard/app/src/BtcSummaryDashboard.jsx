@@ -149,7 +149,7 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={stats.avgLine}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={v => v.slice(2)} interval={4} />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={v => { const [y,m,d] = v.split('-'); const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${mon[+m-1]} ${+d}`; }} interval={20} />
                     <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 3000', 'dataMax + 3000']} />
                     <Tooltip formatter={(v, name) => [formatUsd(Number(v)), name === 'btcPrice' ? 'BTC Price' : 'Avg Buy Price']} labelFormatter={l => `Date: ${l}`} />
                     <Line type="monotone" dataKey="btcPrice"     name="BTC Price"    stroke="#f97316" strokeWidth={3} dot={false} />
