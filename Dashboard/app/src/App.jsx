@@ -61,7 +61,7 @@ export default function App() {
       {active === 'summary' && <BtcSummaryDashboard liveData={liveData} isLive={isLive} />}
       {active === 'dca'     && <BtcDcaDashboard     liveData={liveData} isLive={isLive} />}
       {active === 'crash'   && <BtcCrashDashboard   liveData={liveData} isLive={isLive} />}
-      {active === 'athdca'  && <AthDcaDashboard     liveData={liveData} />}
+      {active === 'athdca'  && <AthDcaDashboard     liveData={liveData} isLive={isLive} />}
     </>
   )
 }

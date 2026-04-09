@@ -18,7 +18,7 @@ function computeBuySize(price, ath) {
   return Math.round(BASE_USDT + logRatio * (MAX_USDT - BASE_USDT));
 }
 
-export default function AthDcaDashboard({ liveData = null }) {
+export default function AthDcaDashboard({ liveData = null, isLive = false }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [range, setRange] = useState('all');
 
@@ -150,7 +150,7 @@ export default function AthDcaDashboard({ liveData = null }) {
         {/* Tabs */}
         <div className="flex flex-wrap gap-3">
           <TabButton id="overview" label="Overview"  icon={BarChart3}  />
-          <TabButton id="log"      label="Buy Log"   icon={ListOrdered} />
+          {!isLive && <TabButton id="log" label="Buy Log" icon={ListOrdered} />}
         </div>
 
         {activeTab === 'overview' && (<>
@@ -180,9 +180,10 @@ export default function AthDcaDashboard({ liveData = null }) {
           </CardContent>
         </Card>
 
-        {/* Stat cards */}
+        {/* Stat cards — demo only (backtest results) */}
+        {!isLive && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard title="BTC Accumulated"  value={formatBtc(sim.totalBtc)}      subtitle={`${sim.buyEvents.length} buys over 2yr backtest`} icon={Bitcoin} />
+          <StatCard title="BTC Accumulated"  value={formatBtc(sim.totalBtc)}      subtitle={`${sim.buyEvents.length} buys over 4yr backtest`} icon={Bitcoin} />
           <StatCard title="Avg Buy Price"    value={formatUsd(sim.avgBuyPrice)}   subtitle="weighted average across all simulated buys" icon={Target} />
           <StatCard title="Position Value"   value={formatUsd(sim.positionValue)} subtitle={`at current ${formatUsd(currentPrice)}`} icon={Wallet} />
           <StatCard
@@ -193,6 +194,7 @@ export default function AthDcaDashboard({ liveData = null }) {
             icon={sim.pnl >= 0 ? TrendingUp : TrendingDown}
           />
         </div>
+        )}
 
         {/* Buy curve + price chart */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -248,8 +250,8 @@ export default function AthDcaDashboard({ liveData = null }) {
             </CardContent>
           </Card>
 
-          {/* Price vs ATH — 2yr real history */}
-          <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
+          {/* Price vs ATH — demo only (backtest history) */}
+          {!isLive && <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -285,7 +287,7 @@ export default function AthDcaDashboard({ liveData = null }) {
                 </ResponsiveContainer>
               </div>
             </CardContent>
-          </Card>
+          </Card>}
         </div>
 
         {/* Algorithm config */}
