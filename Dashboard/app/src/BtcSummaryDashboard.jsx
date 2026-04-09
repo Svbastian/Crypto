@@ -1,13 +1,37 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { dcaBuyEvents, crashBuyEvents, btcPriceSeries, CURRENT_BTC_PRICE } from './data/botData';
 
 export default function BtcSummaryDashboard({ liveData = null, isLive = false }) {
+  const [range, setRange] = useState('all');
 
   // True when user has toggled Live AND API responded
   const showLive = isLive && !!liveData;
+
+  const filterByRange = (arr) => {
+    if (range === 'all') return arr;
+    const days = range === '30d' ? 30 : 7;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    return arr.filter(item => (item.date || '') >= cutoffStr);
+  };
+
+  const xInterval = range === '7d' ? 1 : range === '30d' ? 4 : 20;
+  const xFmt = v => { const [,m,d] = v.split('-'); const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${mon[+m-1]} ${+d}`; };
+
+  const RangeToggle = () => (
+    <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+      {[['All time','all'],['30d','30d'],['7d','7d']].map(([label, val]) => (
+        <button key={val} onClick={() => setRange(val)}
+          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === val ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
   // Normalize live DCA log entries to match botData shape
   const normalizeDca = (e) => ({
@@ -141,15 +165,20 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
           {/* Avg buy price over time */}
           <Card className="rounded-2xl border-0 shadow-lg shadow-black/5 xl:col-span-2">
             <CardHeader>
-              <CardTitle className="text-lg">BTC Price vs Running Average Buy Price</CardTitle>
-              <p className="text-sm text-slate-500">Orange = BTC price. Blue = combined average buy price stepping up with each purchase. Dots mark individual buys.</p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg">BTC Price vs Running Average Buy Price</CardTitle>
+                  <p className="mt-1 text-sm text-slate-500">Orange = BTC price. Blue = combined average buy price stepping up with each purchase. Dots mark individual buys.</p>
+                </div>
+                <RangeToggle />
+              </div>
             </CardHeader>
             <CardContent>
               <div className="h-[320px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={stats.avgLine}>
+                  <LineChart data={filterByRange(stats.avgLine)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={v => { const [y,m,d] = v.split('-'); const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${mon[+m-1]} ${+d}`; }} interval={20} />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={xFmt} interval={xInterval} />
                     <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 3000', 'dataMax + 3000']} />
                     <Tooltip formatter={(v, name) => [formatUsd(Number(v)), name === 'btcPrice' ? 'BTC Price' : 'Avg Buy Price']} labelFormatter={l => `Date: ${l}`} />
                     <Line type="monotone" dataKey="btcPrice"     name="BTC Price"    stroke="#f97316" strokeWidth={3} dot={false} />

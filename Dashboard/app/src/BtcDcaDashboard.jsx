@@ -6,6 +6,30 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [range, setRange] = useState('all');
+
+  const filterByRange = (arr) => {
+    if (range === 'all') return arr;
+    const days = range === '30d' ? 30 : 7;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    return arr.filter(item => (item.date || '') >= cutoffStr);
+  };
+
+  const xInterval = range === '7d' ? 1 : range === '30d' ? 4 : 20;
+  const xFmt = v => { const [,m,d] = v.split('-'); const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${mon[+m-1]} ${+d}`; };
+
+  const RangeToggle = () => (
+    <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+      {[['All time','all'],['30d','30d'],['7d','7d']].map(([label, val]) => (
+        <button key={val} onClick={() => setRange(val)}
+          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === val ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
   // If live data is provided, derive real stats from buy_log.json entries
   const liveStats = useMemo(() => {
@@ -300,17 +324,22 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
               <Card className="rounded-2xl border-0 shadow-lg shadow-black/5 xl:col-span-2">
                 <CardHeader>
-                  <CardTitle className="text-lg">BTC Price vs Your Average Buy Price</CardTitle>
-                  <p className="text-sm text-slate-500">
-                    Orange is BTC. The blue stepped line only changes on executed buys, so you can see how retained weeks and deeper MA triggers pulled your average entry over time.
-                  </p>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-lg">BTC Price vs Your Average Buy Price</CardTitle>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Orange is BTC. The blue stepped line only changes on executed buys, so you can see how retained weeks and deeper MA triggers pulled your average entry over time.
+                      </p>
+                    </div>
+                    <RangeToggle />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[380px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={liveData?.chartData || simulation.chartData}>
+                      <LineChart data={filterByRange(liveData?.chartData || simulation.chartData)}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(value) => value.slice(2)} />
+                        <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={xFmt} interval={xInterval} />
                         <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `$${Math.round(value / 1000)}k`} domain={['dataMin - 4000', 'dataMax + 4000']} />
                         <Tooltip
                           formatter={(value, name) => [formatUsd(Number(value)), name === 'btcPrice' ? 'BTC Price' : 'Avg Buy Price']}
@@ -379,17 +408,22 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
               <Card className="rounded-2xl border-0 shadow-lg shadow-black/5 xl:col-span-2">
                 <CardHeader>
-                  <CardTitle className="text-lg">BTC Price with 7d, 30d, 100d, and 200d Moving Averages</CardTitle>
-                  <p className="text-sm text-slate-500">
-                    The bot only buys when BTC is below the 7d MA. Position sizing then scales with deeper discounts: 1x below 7d, 2x below 30d, 3x below 100d, and 4.5x below 200d.
-                  </p>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-lg">BTC Price with 7d, 30d, 100d, and 200d Moving Averages</CardTitle>
+                      <p className="mt-1 text-sm text-slate-500">
+                        The bot only buys when BTC is below the 7d MA. Position sizing then scales with deeper discounts: 1x below 7d, 2x below 30d, 3x below 100d, and 4.5x below 200d.
+                      </p>
+                    </div>
+                    <RangeToggle />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[380px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={liveData?.chartData || simulation.chartData}>
+                      <LineChart data={filterByRange(liveData?.chartData || simulation.chartData)}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={(value) => value.slice(2)} />
+                        <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={xFmt} interval={xInterval} />
                         <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `$${Math.round(value / 1000)}k`} domain={['dataMin - 4000', 'dataMax + 4000']} />
                         <Tooltip formatter={(value, name) => [formatUsd(Number(value)), name]} labelFormatter={(label) => `Date: ${label}`} />
                         <Legend content={() => <MovingAverageLegend />} />

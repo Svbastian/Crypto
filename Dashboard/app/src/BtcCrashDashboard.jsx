@@ -6,6 +6,30 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 export default function BtcCrashDashboard({ liveData = null, isLive = false }) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [range, setRange] = useState('all');
+
+  const filterByRange = (arr) => {
+    if (range === 'all') return arr;
+    const days = range === '30d' ? 30 : 7;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    return arr.filter(item => (item.date || '') >= cutoffStr);
+  };
+
+  const xInterval = range === '7d' ? 1 : range === '30d' ? 4 : 20;
+  const xFmt = v => { const [,m,d] = v.split('-'); const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${mon[+m-1]} ${+d}`; };
+
+  const RangeToggle = () => (
+    <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+      {[['All time','all'],['30d','30d'],['7d','7d']].map(([label, val]) => (
+        <button key={val} onClick={() => setRange(val)}
+          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === val ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
   // Tier system — must match crash_bot.py TIERS exactly
   const TIERS = [
@@ -237,18 +261,23 @@ export default function BtcCrashDashboard({ liveData = null, isLive = false }) {
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
               <Card className="rounded-2xl border-0 shadow-lg shadow-black/5 xl:col-span-2">
                 <CardHeader>
-                  <CardTitle className="text-lg">BTC Price vs MA30 with Buy Events</CardTitle>
-                  <p className="text-sm text-slate-500">
-                    Orange = BTC price. Purple = MA30 (buy filter). Dots mark crash bot buy events.
-                  </p>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-lg">BTC Price vs MA30 with Buy Events</CardTitle>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Orange = BTC price. Purple = MA30 (buy filter). Dots mark crash bot buy events.
+                      </p>
+                    </div>
+                    <RangeToggle />
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[380px] w-full">
                     {chartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={chartData}>
+                        <LineChart data={filterByRange(chartData)}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                          <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={v => { const [y,m,d] = v.split('-'); const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${mon[+m-1]} ${+d}`; }} interval={20} />
+                          <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={xFmt} interval={xInterval} />
                           <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 3000', 'dataMax + 3000']} />
                           <Tooltip
                             formatter={(value, name) => [
