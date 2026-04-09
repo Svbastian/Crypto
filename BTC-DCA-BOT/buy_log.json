@@ -150,7 +150,7 @@
     "units_requested": 2.0,
     "trigger": "30d MA",
     "multiplier": 2,
-    "retainedWeeksIncluded": 1,
+    "retainedWeeksIncluded": 0,
     "formula": "2 \u00d7 25 \u00d7 1"
   }
 ]
