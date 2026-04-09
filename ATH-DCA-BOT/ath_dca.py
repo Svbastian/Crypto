@@ -67,8 +67,9 @@ if dip_pct < MIN_DIP:
     print(f"⏭️  Price is only {dip_pct * 100:.1f}% below ATH — below {MIN_DIP * 100:.0f}% threshold. No buy.")
 else:
     # Logarithmic scaling: big gains in realistic dip range, flattens at extreme levels
+    LOG_K      = 10
     ratio      = min((dip_pct - MIN_DIP) / (1.0 - MIN_DIP), 1.0)
-    log_ratio  = math.log1p(ratio) / math.log1p(1)           # ln(1+ratio)/ln(2), maps 0→0, 1→1
+    log_ratio  = math.log1p(ratio * LOG_K) / math.log1p(LOG_K)  # maps 0→0, 1→1 with strong log curve
     buy_amount = BASE_USDT + log_ratio * (MAX_USDT - BASE_USDT)
     buy_amount = round(buy_amount, 2)
 
