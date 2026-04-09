@@ -141,5 +141,16 @@
     "multiplier": 1,
     "retainedWeeksIncluded": 1,
     "formula": "1 \u00d7 25 \u00d7 1"
+  },
+  {
+    "timestamp": "2026-04-06T09:00:00.000000",
+    "btc_bought": 0.00072,
+    "price": 68987.7,
+    "usdt_spent": 49.66,
+    "units_requested": 2.0,
+    "trigger": "30d MA",
+    "multiplier": 2,
+    "retainedWeeksIncluded": 1,
+    "formula": "2 \u00d7 25 \u00d7 1"
   }
 ]
