@@ -63,12 +63,13 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
     // Walk price series, carry forward latest avgBuyPrice
     let lastAvg = null;
     const avgLine = priceSeries.map(p => {
-      if (buyByDate[p.date]) lastAvg = buyByDate[p.date];
+      const isBuyDate = !!buyByDate[p.date];
+      if (isBuyDate) lastAvg = buyByDate[p.date];
       return {
         date:        p.date,
         btcPrice:    p.btcPrice,
         avgBuyPrice: lastAvg ? lastAvg.avgBuyPrice : null,
-        bot:         lastAvg ? lastAvg.bot : null,
+        bot:         isBuyDate ? lastAvg.bot : null,
       };
     });
 
