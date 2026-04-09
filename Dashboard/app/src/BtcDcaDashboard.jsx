@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, CalendarClock, Layers, Repeat, ListOrdered, BarChart3 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { dcaBacktestWeekly } from './data/dcaBacktestData';
+import { weeklyBacktest4yr } from './data/backtest4yr';
 
 export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -66,8 +66,8 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
     ma200: 4.5,
   };
 
-  // Real 2yr weekly backtest data — fetched from Binance, MAs computed from real daily history
-  const marketSeries = dcaBacktestWeekly;
+  // Real 4yr weekly backtest data — fetched from Binance, MAs computed from real daily history
+  const marketSeries = weeklyBacktest4yr;
 
   const simulation = useMemo(() => {
     let totalBtc = 0;

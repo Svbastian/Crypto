@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, Zap, ShieldCheck, ListOrdered, BarChart3, Clock } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { weeklyBacktest4yr, crashBacktest4yr } from './data/backtest4yr';
 
 export default function BtcCrashDashboard({ liveData = null, isLive = false }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -85,8 +86,10 @@ export default function BtcCrashDashboard({ liveData = null, isLive = false }) {
     tierCounts:    { 'Tier 1 (-7%)': 0, 'Tier 2 (-10%)': 0, 'Tier 3 (-15%)': 0, 'Tier 4 (-20%)': 0 },
   };
 
-  // Mock price series for demo mode only
-  const priceSeries = [
+  // Real 4yr price series for demo mode — weekly entries from Binance
+  const priceSeries = weeklyBacktest4yr.map(w => ({ date: w.date, btcPrice: w.btcPrice, ma30: w.ma30 }));
+
+  const _unusedPriceSeries = [
     { date: '2022-01-03', btcPrice: 46200,  ma30: 49100 },
     { date: '2022-02-07', btcPrice: 41800,  ma30: 44600 },
     { date: '2022-03-07', btcPrice: 38900,  ma30: 42100 },
@@ -129,32 +132,24 @@ export default function BtcCrashDashboard({ liveData = null, isLive = false }) {
     { date: '2025-03-03', btcPrice: 86200,  ma30: 93100 },
     { date: '2025-03-17', btcPrice: 82900,  ma30: 90400 },
     { date: '2026-03-28', btcPrice: 87400,  ma30: 88200 },
-  ];
+  ]; // _unusedPriceSeries
 
-  // Mock crash buy events — demo mode only
-  const buyEvents = [
-    { date: '2022-05-12', price: 28600,  dipPct: -13.2, tier: 'Tier 2 (-10%)', units: 2,   usdtSpent: 50.00  },
-    { date: '2022-05-19', price: 28900,  dipPct: -11.8, tier: 'Tier 2 (-10%)', units: 2,   usdtSpent: 50.00  },
-    { date: '2022-06-13', price: 22500,  dipPct: -21.4, tier: 'Tier 4 (-20%)', units: 4.5, usdtSpent: 112.50 },
-    { date: '2022-06-18', price: 19400,  dipPct: -16.9, tier: 'Tier 3 (-15%)', units: 3,   usdtSpent: 75.00  },
-    { date: '2022-09-13', price: 20300,  dipPct: -10.6, tier: 'Tier 2 (-10%)', units: 2,   usdtSpent: 50.00  },
-    { date: '2022-11-09', price: 15900,  dipPct: -22.1, tier: 'Tier 4 (-20%)', units: 4.5, usdtSpent: 112.50 },
-    { date: '2023-03-03', price: 22100,  dipPct: -10.9, tier: 'Tier 2 (-10%)', units: 2,   usdtSpent: 50.00  },
-    { date: '2023-04-26', price: 27900,  dipPct: -11.4, tier: 'Tier 2 (-10%)', units: 2,   usdtSpent: 50.00  },
-    { date: '2023-08-17', price: 26300,  dipPct: -10.2, tier: 'Tier 2 (-10%)', units: 2,   usdtSpent: 50.00  },
-    { date: '2024-03-19', price: 61900,  dipPct: -10.5, tier: 'Tier 2 (-10%)', units: 2,   usdtSpent: 50.00  },
-    { date: '2024-08-05', price: 53700,  dipPct: -17.3, tier: 'Tier 3 (-15%)', units: 3,   usdtSpent: 75.00  },
-    { date: '2025-02-26', price: 82400,  dipPct: -10.8, tier: 'Tier 2 (-10%)', units: 2,   usdtSpent: 50.00  },
-    { date: '2025-03-03', price: 86100,  dipPct: -12.6, tier: 'Tier 2 (-10%)', units: 2,   usdtSpent: 50.00  },
-    { date: '2026-02-05', price: 62700,  dipPct: -14.3, tier: 'Tier 3 (-15%)', units: 3,   usdtSpent: 75.00  },
-  ];
+  // Real 4yr crash bot simulation — daily checks, MA30 filter, 48h cooldown
+  const buyEvents = crashBacktest4yr.map(e => ({
+    date:      e.date,
+    price:     e.price,
+    dipPct:    e.dip_pct,
+    tier:      e.tier,
+    usdtSpent: e.usdt,
+    btcBought: e.btcBought,
+  }));
 
   const simulation = useMemo(() => {
     const enriched = buyEvents.map(e => ({ ...e, btcBought: e.usdtSpent / e.price }));
     const totalInvested = enriched.reduce((s, e) => s + e.usdtSpent, 0);
     const totalBtc      = enriched.reduce((s, e) => s + e.btcBought, 0);
     const avgBuyPrice   = totalInvested / totalBtc;
-    const currentPrice  = priceSeries[priceSeries.length - 1].btcPrice;
+    const currentPrice  = weeklyBacktest4yr[weeklyBacktest4yr.length - 1].btcPrice;
     const positionValue = totalBtc * currentPrice;
     const pnl           = positionValue - totalInvested;
     const pnlPct        = (pnl / totalInvested) * 100;

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, Zap } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, AreaChart, Area } from 'recharts';
-import { btcWeekly5yr } from './data/athBacktestData';
+import { weeklyBacktest4yr } from './data/backtest4yr';
 
 // === Algorithm constants (must match ath_dca.py exactly) ===
 const MIN_DIP   = 0.15;   // trigger at -15% below rolling ATH
@@ -42,18 +42,16 @@ export default function AthDcaDashboard({ liveData = null }) {
 
   // 2-year backtest simulation using real weekly data
   const sim = useMemo(() => {
-    // All 260 weeks already have rolling_ath pre-computed from 5yr history
-    // Filter to last 2 years for the backtest
-    const TWO_YEARS_AGO = (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 2); return d.toISOString().slice(0, 10); })();
-    const backtestWeeks = btcWeekly5yr.filter(w => w.date >= TWO_YEARS_AGO);
+    // Real 4yr weekly data with pre-computed 5yr rolling ATH
+    const backtestWeeks = weeklyBacktest4yr;
 
     let totalInvested = 0;
     let totalBtc = 0;
     const buyEvents = [];
 
     const enriched = backtestWeeks.map(w => {
-      const price      = w.close;
-      const ath        = w.rolling_ath;
+      const price      = w.btcPrice;
+      const ath        = w.ath5yr;
       const triggerPx  = ath * (1 - MIN_DIP);
       const dip        = (ath - price) / ath;
       const buySize    = computeBuySize(price, ath);
