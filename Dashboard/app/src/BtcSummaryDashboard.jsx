@@ -4,30 +4,34 @@ import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target } from 'lucide-react'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { dcaBuyEvents, crashBuyEvents, btcPriceSeries, CURRENT_BTC_PRICE } from './data/botData';
 
-export default function BtcSummaryDashboard({ liveData = null }) {
+export default function BtcSummaryDashboard({ liveData = null, isLive = false }) {
+
+  // True when user has toggled Live AND API responded
+  const showLive = isLive && !!liveData;
 
   // Normalize live DCA log entries to match botData shape
   const normalizeDca = (e) => ({
     date:       (e.timestamp || '').slice(0, 10),
     price:      e.price,
     usdtSpent:  e.usdt_spent,
-    trigger:    e.units_requested ? `${e.units_requested}× buy` : 'buy',
+    trigger:    e.trigger || (e.units_requested ? `${e.units_requested}× buy` : 'buy'),
     multiplier: e.units_requested || 1,
   });
 
   const normalizeCrash = (e) => ({
-    date:     (e.timestamp || '').slice(0, 10),
-    price:    e.price,
+    date:      (e.timestamp || '').slice(0, 10),
+    price:     e.price,
     usdtSpent: e.usdt_spent,
-    dipPct:   e.dip_pct || 0,
-    tier:     e.tier || 'Crash buy',
-    units:    e.units_requested || 1,
+    dipPct:    e.dip_pct || 0,
+    tier:      e.tier || 'Crash buy',
+    units:     e.units_requested || 1,
   });
 
-  const activeDca   = (liveData?.dcaBuys?.length   > 0) ? liveData.dcaBuys.map(normalizeDca)     : dcaBuyEvents;
-  const activeCrash = (liveData?.crashBuys?.length > 0) ? liveData.crashBuys.map(normalizeCrash) : crashBuyEvents;
-  const currentPrice = liveData?.btcPrice || CURRENT_BTC_PRICE;
-  const isLive = liveData?.dcaBuys?.length > 0 || liveData?.crashBuys?.length > 0;
+  // In live mode always use real data — never fall back to mock
+  const activeDca    = showLive ? (liveData.dcaBuys?.map(normalizeDca)     || []) : dcaBuyEvents;
+  const activeCrash  = showLive ? (liveData.crashBuys?.map(normalizeCrash) || []) : crashBuyEvents;
+  const currentPrice = showLive ? (liveData.btcPrice || 0) : CURRENT_BTC_PRICE;
+  const priceSeries  = showLive ? (liveData.chartData || []) : btcPriceSeries;
 
   const stats = useMemo(() => {
     const dcaEnriched   = activeDca.map(e   => ({ ...e, btcBought: e.usdtSpent / e.price, bot: 'DCA'   }));
@@ -58,7 +62,7 @@ export default function BtcSummaryDashboard({ liveData = null }) {
 
     // Walk price series, carry forward latest avgBuyPrice
     let lastAvg = null;
-    const avgLine = btcPriceSeries.map(p => {
+    const avgLine = priceSeries.map(p => {
       if (buyByDate[p.date]) lastAvg = buyByDate[p.date];
       return {
         date:        p.date,
@@ -84,7 +88,7 @@ export default function BtcSummaryDashboard({ liveData = null }) {
     ];
 
     return { totalInvested, totalBtc, avgBuyPrice, positionValue, pnl, pnlPct, dcaInvested, crashInvested, dcaBtc, crashBtc, avgLine, monthlyChart, contribution, all };
-  }, [activeDca, activeCrash, currentPrice]);
+  }, [activeDca, activeCrash, currentPrice, priceSeries]);
 
   const formatUsd = v => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v);
   const formatBtc = v => `${v.toFixed(6)} BTC`;
@@ -120,7 +124,7 @@ export default function BtcSummaryDashboard({ liveData = null }) {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard title="Total BTC Accumulated" value={formatBtc(stats.totalBtc)}      subtitle={formatUsd(stats.totalInvested) + ' total invested'}          icon={Bitcoin} />
           <StatCard title="Overall Avg Buy Price"  value={formatUsd(stats.avgBuyPrice)}   subtitle="weighted across all buys from both bots"                      icon={Target} />
-          <StatCard title="Position Value"          value={formatUsd(stats.positionValue)} subtitle={`at current price of ${formatUsd(CURRENT_BTC_PRICE)}`}         icon={Wallet} />
+          <StatCard title="Position Value"          value={formatUsd(stats.positionValue)} subtitle={`at current price of ${formatUsd(currentPrice)}`}         icon={Wallet} />
           <StatCard
             title="Total Profit / Loss"
             value={formatUsd(stats.pnl)}
