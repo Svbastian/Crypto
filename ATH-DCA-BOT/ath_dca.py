@@ -1,5 +1,6 @@
 import os
 import json
+import math
 from datetime import datetime
 from dotenv import load_dotenv
 from binance.client import Client
@@ -23,9 +24,10 @@ email_receiver = os.getenv("EMAIL_RECEIVER")
 # === ATH-DCA Strategy Config ===
 ATH_WINDOW_DAYS = 1825   # 5 years of daily candles
 MIN_DIP         = 0.15   # start buying at -15% below rolling ATH
-MAX_DIP         = 0.50   # reach max buy size at -50% below rolling ATH
-BASE_USDT       = 25.0   # minimum buy ($25 at -15%)
-MAX_USDT        = 500.0  # maximum buy ($500 at -50% or deeper)
+BASE_USDT       = 25.0   # minimum buy at trigger (-15%)
+MAX_USDT        = 1000.0 # theoretical max buy (approached logarithmically, never truly reached)
+# Scaling: logarithmic — aggressive gains in realistic -15% to -60% range,
+# flattens toward impossible levels (-90%+). Formula: ln(1+ratio)/ln(2)
 
 # === Initialize Client ===
 client = Client(api_key, api_secret)
@@ -64,10 +66,10 @@ print(f"📉 Dip from ATH: {dip_pct * 100:.1f}%")
 if dip_pct < MIN_DIP:
     print(f"⏭️  Price is only {dip_pct * 100:.1f}% below ATH — below {MIN_DIP * 100:.0f}% threshold. No buy.")
 else:
-    # Scale linearly from BASE_USDT at MIN_DIP to MAX_USDT at MAX_DIP
-    ratio      = (dip_pct - MIN_DIP) / (MAX_DIP - MIN_DIP)
-    ratio      = min(ratio, 1.0)                              # cap at 100% (≥ -50%)
-    buy_amount = BASE_USDT + (ratio * (MAX_USDT - BASE_USDT))
+    # Logarithmic scaling: big gains in realistic dip range, flattens at extreme levels
+    ratio      = min((dip_pct - MIN_DIP) / (1.0 - MIN_DIP), 1.0)
+    log_ratio  = math.log1p(ratio) / math.log1p(1)           # ln(1+ratio)/ln(2), maps 0→0, 1→1
+    buy_amount = BASE_USDT + log_ratio * (MAX_USDT - BASE_USDT)
     buy_amount = round(buy_amount, 2)
 
     print(f"✅ Buy signal — ratio: {ratio:.2f}, buy size: ${buy_amount:.2f}")
@@ -105,14 +107,14 @@ else:
 
             # === Log the Buy ===
             log_entry = {
-                "timestamp":    datetime.utcnow().isoformat(),
-                "btc_bought":   executed_qty,
-                "price":        btc_price,
-                "usdt_spent":   cummulative_quote,
-                "rolling_ath":  rolling_ath,
-                "dip_pct":      round(dip_pct * 100, 2),
-                "ratio":        round(ratio, 4),
-                "buy_amount":   buy_amount,
+                "timestamp":   datetime.utcnow().isoformat(),
+                "btc_bought":  executed_qty,
+                "price":       btc_price,
+                "usdt_spent":  cummulative_quote,
+                "rolling_ath": rolling_ath,
+                "dip_pct":     round(dip_pct * 100, 2),
+                "log_ratio":   round(log_ratio, 4),
+                "buy_amount":  buy_amount,
             }
 
             try:

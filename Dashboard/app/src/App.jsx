@@ -2,6 +2,7 @@ import { useState } from 'react'
 import BtcDcaDashboard from './BtcDcaDashboard'
 import BtcCrashDashboard from './BtcCrashDashboard'
 import BtcSummaryDashboard from './BtcSummaryDashboard'
+import AthDcaDashboard from './AthDcaDashboard'
 import { useLiveData } from './hooks/useLiveData'
 
 export default function App() {
@@ -10,9 +11,10 @@ export default function App() {
   const { data, loading, error, lastUpdated, refresh } = useLiveData()
 
   const tabs = [
-    { id: 'summary', label: 'Summary'   },
-    { id: 'dca',     label: 'DCA Bot'   },
-    { id: 'crash',   label: 'Crash Bot' },
+    { id: 'summary', label: 'Summary'    },
+    { id: 'dca',     label: 'DCA Bot'    },
+    { id: 'crash',   label: 'Crash Bot'  },
+    { id: 'athdca',  label: 'ATH-DCA ✦' },
   ]
 
   const liveData = isLive ? data : null
@@ -59,6 +61,7 @@ export default function App() {
       {active === 'summary' && <BtcSummaryDashboard liveData={liveData} isLive={isLive} />}
       {active === 'dca'     && <BtcDcaDashboard     liveData={liveData} isLive={isLive} />}
       {active === 'crash'   && <BtcCrashDashboard   liveData={liveData} isLive={isLive} />}
+      {active === 'athdca'  && <AthDcaDashboard     liveData={liveData} />}
     </>
   )
 }
