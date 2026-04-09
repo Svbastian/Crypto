@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, Zap } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, Zap, ListOrdered, BarChart3 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, AreaChart, Area } from 'recharts';
 import { weeklyBacktest4yr } from './data/backtest4yr';
 
 // === Algorithm constants (must match ath_dca.py exactly) ===
 const MIN_DIP   = 0.15;   // trigger at -15% below rolling ATH
 const BASE_USDT = 25;     // buy size at trigger
-const MAX_USDT  = 1000;   // theoretical max
+const MAX_USDT  = 500;    // maximum buy (at deep crashes)
 const LOG_K     = 10;     // logarithmic steepness — higher = steeper early curve
 
 function computeBuySize(price, ath) {
@@ -19,7 +19,15 @@ function computeBuySize(price, ath) {
 }
 
 export default function AthDcaDashboard({ liveData = null }) {
+  const [activeTab, setActiveTab] = useState('overview');
   const [range, setRange] = useState('all');
+
+  const TabButton = ({ id, label, icon: Icon }) => (
+    <button onClick={() => setActiveTab(id)}
+      className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${activeTab === id ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}>
+      <Icon className="h-4 w-4" />{label}
+    </button>
+  );
   const currentPrice = liveData?.btcPrice || 71900;
 
   const xFmt = v => {
@@ -132,12 +140,20 @@ export default function AthDcaDashboard({ liveData = null }) {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">ATH-DCA Bot</h1>
-            <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">Next Gen · 2yr Backtest</span>
+            <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">Next Gen · 4yr Backtest</span>
           </div>
           <p className="mt-1 text-slate-600">
             Logarithmic buy scaling based on distance from 5-year rolling ATH. Real BTC price history, real algorithm.
           </p>
         </div>
+
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-3">
+          <TabButton id="overview" label="Overview"  icon={BarChart3}  />
+          <TabButton id="log"      label="Buy Log"   icon={ListOrdered} />
+        </div>
+
+        {activeTab === 'overview' && (<>
 
         {/* Current status banner */}
         <Card className={`rounded-2xl border-0 shadow-lg shadow-black/5 ${inBuyZone ? 'bg-emerald-50' : 'bg-slate-100'}`}>
@@ -272,46 +288,6 @@ export default function AthDcaDashboard({ liveData = null }) {
           </Card>
         </div>
 
-        {/* Simulated buy log */}
-        <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
-          <CardHeader>
-            <CardTitle className="text-lg">Simulated Buy Log — 2yr Backtest</CardTitle>
-            <p className="text-sm text-slate-500">Real BTC prices, real algorithm. What would have been bought weekly since {sim.enriched[0]?.date}.</p>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-slate-200 text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Week</th>
-                    <th className="px-4 py-3 font-medium">BTC Price</th>
-                    <th className="px-4 py-3 font-medium">Rolling ATH</th>
-                    <th className="px-4 py-3 font-medium">Dip from ATH</th>
-                    <th className="px-4 py-3 font-medium">USDT Spent</th>
-                    <th className="px-4 py-3 font-medium">BTC Bought</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sim.buyEvents.map((e, i) => (
-                    <tr key={e.date} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                      <td className="px-4 py-3 text-slate-700">{e.date}</td>
-                      <td className="px-4 py-3 text-slate-700">{formatUsd(e.price)}</td>
-                      <td className="px-4 py-3 text-slate-500">{formatUsd(e.ath)}</td>
-                      <td className="px-4 py-3">
-                        <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
-                          -{e.dip.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-900">{formatUsd(e.buySize)}</td>
-                      <td className="px-4 py-3 text-slate-700">{formatBtc(e.btc)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Algorithm config */}
         <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
           <CardHeader>
@@ -324,7 +300,7 @@ export default function AthDcaDashboard({ liveData = null }) {
                 ['ATH Window', '5 years', '1,825 daily candles'],
                 ['Buy Trigger', '-15% from ATH', `currently ${formatUsd(sim.currentAth * 0.85)}`],
                 ['Min Buy', '$25', 'at exactly -15%'],
-                ['Max Buy', '$1,000', 'approached asymptotically'],
+                ['Max Buy', '$500', 'approached asymptotically'],
                 ['Curve', 'Logarithmic', `steepness k=${LOG_K}`],
               ].map(([label, val, sub]) => (
                 <div key={label} className="rounded-xl bg-slate-50 p-4">
@@ -336,6 +312,49 @@ export default function AthDcaDashboard({ liveData = null }) {
             </div>
           </CardContent>
         </Card>
+
+        </>)}
+
+        {activeTab === 'log' && (
+          <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
+            <CardHeader>
+              <CardTitle className="text-lg">Simulated Buy Log — 4yr Backtest</CardTitle>
+              <p className="text-sm text-slate-500">Real BTC prices, real algorithm. What would have been bought weekly since {sim.enriched[0]?.date}.</p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="border-b border-slate-200 text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Week</th>
+                      <th className="px-4 py-3 font-medium">BTC Price</th>
+                      <th className="px-4 py-3 font-medium">Rolling ATH</th>
+                      <th className="px-4 py-3 font-medium">Dip from ATH</th>
+                      <th className="px-4 py-3 font-medium">USDT Spent</th>
+                      <th className="px-4 py-3 font-medium">BTC Bought</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sim.buyEvents.map((e, i) => (
+                      <tr key={e.date} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                        <td className="px-4 py-3 text-slate-700">{e.date}</td>
+                        <td className="px-4 py-3 text-slate-700">{formatUsd(e.price)}</td>
+                        <td className="px-4 py-3 text-slate-500">{formatUsd(e.ath)}</td>
+                        <td className="px-4 py-3">
+                          <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
+                            -{e.dip.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-slate-900">{formatUsd(e.buySize)}</td>
+                        <td className="px-4 py-3 text-slate-700">{formatBtc(e.btc)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       </div>
     </div>

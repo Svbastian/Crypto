@@ -3,6 +3,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { dcaBuyEvents, crashBuyEvents, btcPriceSeries, CURRENT_BTC_PRICE } from './data/botData';
+import { weeklyBacktest4yr } from './data/backtest4yr';
+
+// ATH-DCA algorithm constants (must match ath_dca.py)
+const MIN_DIP_ATH = 0.15;
+const BASE_ATH    = 25;
+const MAX_ATH     = 500;
+const LOG_K_ATH   = 10;
+
+function computeAthBuySize(price, ath) {
+  const dip = (ath - price) / ath;
+  if (dip < MIN_DIP_ATH) return null;
+  const ratio    = Math.min((dip - MIN_DIP_ATH) / (1.0 - MIN_DIP_ATH), 1.0);
+  const logRatio = Math.log1p(ratio * LOG_K_ATH) / Math.log1p(LOG_K_ATH);
+  return Math.round(BASE_ATH + logRatio * (MAX_ATH - BASE_ATH));
+}
 
 export default function BtcSummaryDashboard({ liveData = null, isLive = false }) {
   const [range, setRange] = useState('all');
@@ -57,18 +72,33 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
   const currentPrice = showLive ? (liveData.btcPrice || 0) : CURRENT_BTC_PRICE;
   const priceSeries  = showLive ? (liveData.chartData || []) : btcPriceSeries;
 
+  // ATH-DCA: simulate from 4yr backtest in demo mode; no live data yet
+  const activeAth = useMemo(() => {
+    if (showLive) return [];
+    return weeklyBacktest4yr.reduce((acc, w) => {
+      const size = computeAthBuySize(w.btcPrice, w.ath5yr);
+      if (size !== null) {
+        acc.push({ date: w.date, price: w.btcPrice, usdtSpent: size, btcBought: size / w.btcPrice, bot: 'ATH', dip: ((w.ath5yr - w.btcPrice) / w.ath5yr * 100).toFixed(1) });
+      }
+      return acc;
+    }, []);
+  }, [showLive]);
+
   const stats = useMemo(() => {
     const dcaEnriched   = activeDca.map(e   => ({ ...e, btcBought: e.usdtSpent / e.price, bot: 'DCA'   }));
     const crashEnriched = activeCrash.map(e => ({ ...e, btcBought: e.usdtSpent / e.price, bot: 'Crash' }));
-    const all = [...dcaEnriched, ...crashEnriched].sort((a, b) => a.date.localeCompare(b.date));
+    const athEnriched   = activeAth;  // already has btcBought
+    const all = [...dcaEnriched, ...crashEnriched, ...athEnriched].sort((a, b) => a.date.localeCompare(b.date));
 
-    const dcaInvested   = dcaEnriched.reduce((s, e)   => s + e.usdtSpent, 0);
+    const dcaInvested   = dcaEnriched.reduce((s, e)  => s + e.usdtSpent, 0);
     const crashInvested = crashEnriched.reduce((s, e) => s + e.usdtSpent, 0);
-    const totalInvested = dcaInvested + crashInvested;
+    const athInvested   = athEnriched.reduce((s, e)   => s + e.usdtSpent, 0);
+    const totalInvested = dcaInvested + crashInvested + athInvested;
 
-    const dcaBtc   = dcaEnriched.reduce((s, e)   => s + e.btcBought, 0);
+    const dcaBtc   = dcaEnriched.reduce((s, e)  => s + e.btcBought, 0);
     const crashBtc = crashEnriched.reduce((s, e) => s + e.btcBought, 0);
-    const totalBtc = dcaBtc + crashBtc;
+    const athBtc   = athEnriched.reduce((s, e)   => s + e.btcBought, 0);
+    const totalBtc = dcaBtc + crashBtc + athBtc;
 
     const avgBuyPrice   = totalInvested / totalBtc;
     const positionValue = totalBtc * currentPrice;
@@ -101,19 +131,20 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
     const monthMap = {};
     all.forEach(e => {
       const month = e.date.slice(0, 7);
-      if (!monthMap[month]) monthMap[month] = { month, DCA: 0, Crash: 0 };
+      if (!monthMap[month]) monthMap[month] = { month, DCA: 0, Crash: 0, ATH: 0 };
       monthMap[month][e.bot] += e.usdtSpent;
     });
     const monthlyChart = Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month));
 
     // Contribution bars
     const contribution = [
-      { name: 'DCA Bot',   invested: dcaInvested,   btc: dcaBtc,   avg: dcaInvested / dcaBtc,   buys: dcaEnriched.length   },
-      { name: 'Crash Bot', invested: crashInvested, btc: crashBtc, avg: crashInvested / crashBtc, buys: crashEnriched.length },
+      { name: 'DCA Bot',   invested: dcaInvested,   btc: dcaBtc,   avg: dcaBtc   > 0 ? dcaInvested / dcaBtc     : 0, buys: dcaEnriched.length,   color: '#6366f1' },
+      { name: 'Crash Bot', invested: crashInvested, btc: crashBtc, avg: crashBtc > 0 ? crashInvested / crashBtc : 0, buys: crashEnriched.length, color: '#ef4444' },
+      { name: 'ATH-DCA',   invested: athInvested,   btc: athBtc,   avg: athBtc   > 0 ? athInvested / athBtc     : 0, buys: athEnriched.length,   color: '#7c3aed' },
     ];
 
-    return { totalInvested, totalBtc, avgBuyPrice, positionValue, pnl, pnlPct, dcaInvested, crashInvested, dcaBtc, crashBtc, avgLine, monthlyChart, contribution, all };
-  }, [activeDca, activeCrash, currentPrice, priceSeries]);
+    return { totalInvested, totalBtc, avgBuyPrice, positionValue, pnl, pnlPct, avgLine, monthlyChart, contribution, all };
+  }, [activeDca, activeCrash, activeAth, currentPrice, priceSeries]);
 
   const formatUsd = v => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v);
   const formatBtc = v => `${v.toFixed(6)} BTC`;
@@ -141,7 +172,7 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Combined Summary</h1>
           <p className="mt-1 text-slate-600">
-            Overall performance across both the DCA bot and Crash bot — {stats.all.length} total buys.
+            Overall performance across all three bots — {stats.all.length} total buys.
           </p>
         </div>
 
@@ -185,7 +216,7 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
                     <Line type="stepAfter" dataKey="avgBuyPrice" name="Avg Buy Price" stroke="#2563eb" strokeWidth={2} connectNulls dot={(props) => {
                       const { cx, cy, payload } = props;
                       if (!payload.bot) return null;
-                      const color = payload.bot === 'DCA' ? '#6366f1' : '#ef4444';
+                      const color = payload.bot === 'DCA' ? '#6366f1' : payload.bot === 'ATH' ? '#7c3aed' : '#ef4444';
                       return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={5} fill={color} stroke="#fff" strokeWidth={2} />;
                     }} />
                   </LineChart>
@@ -196,6 +227,7 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
                 <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-blue-600" /> Avg Buy Price</div>
                 <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-500" /> DCA buy</div>
                 <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" /> Crash buy</div>
+                <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-violet-700" /> ATH-DCA buy</div>
               </div>
             </CardContent>
           </Card>
@@ -203,8 +235,8 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
           {/* Bot comparison */}
           <div className="space-y-4">
             {stats.contribution.map(bot => {
-              const color = bot.name === 'DCA Bot' ? '#6366f1' : '#ef4444';
-              const pct = (bot.invested / stats.totalInvested) * 100;
+              const color = bot.color;
+              const pct = stats.totalInvested > 0 ? (bot.invested / stats.totalInvested) * 100 : 0;
               return (
                 <Card key={bot.name} className="rounded-2xl border-0 shadow-lg shadow-black/5">
                   <CardHeader className="pb-2">
@@ -232,7 +264,7 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
         {/* Monthly spend bar chart */}
         <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
           <CardHeader>
-            <CardTitle className="text-lg">Monthly Spend — DCA vs Crash Bot</CardTitle>
+            <CardTitle className="text-lg">Monthly Spend — DCA vs Crash Bot vs ATH-DCA</CardTitle>
             <p className="text-sm text-slate-500">USDT deployed each month, split by bot.</p>
           </CardHeader>
           <CardContent>
@@ -246,6 +278,7 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
                   <Legend />
                   <Bar dataKey="DCA"   name="DCA Bot"   fill="#6366f1" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Crash" name="Crash Bot" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="ATH"   name="ATH-DCA"   fill="#7c3aed" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -274,9 +307,10 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
                 <tbody>
                   {stats.all.map((e, i) => {
                     const isDca  = e.bot === 'DCA';
-                    const label  = isDca ? e.trigger : e.tier;
-                    const color  = isDca ? '#6366f1' : '#ef4444';
-                    const bgColor = isDca ? '#6366f120' : '#ef444420';
+                    const isAth  = e.bot === 'ATH';
+                    const label  = isDca ? e.trigger : isAth ? `-${e.dip}% from ATH` : e.tier;
+                    const color  = isDca ? '#6366f1' : isAth ? '#7c3aed' : '#ef4444';
+                    const bgColor = isDca ? '#6366f120' : isAth ? '#7c3aed20' : '#ef444420';
                     return (
                       <tr key={e.date + i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                         <td className="px-4 py-3 text-slate-700">{e.date}</td>
