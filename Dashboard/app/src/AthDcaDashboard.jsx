@@ -102,34 +102,39 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
     return { enriched, buyEvents, totalInvested, totalBtc, positionValue, pnl, pnlPct, avgBuyPrice, currentAth, currentDip, currentBuySize };
   }, [currentPrice]);
 
-  // Live chart data — built from real buy log; no simulated dots in live mode
+  // Live chart data — one dot per real buy log entry at its exact date
   const liveChartData = useMemo(() => {
     if (!isLive) return null;
-    // Real buy dates (Mondays) don't match hybridWeekly dates (Saturdays) — use forward scan
-    const sortedBuys = [...(liveStats?.buys || [])].sort((a, b) => a.date.localeCompare(b.date));
+    const buys = [...(liveStats?.buys || [])].sort((a, b) => a.date.localeCompare(b.date));
+
+    // Build running avg and lookup by date
     let runBtc = 0, runInvested = 0;
-    const buyEvents = sortedBuys.map(b => {
+    const buyByDate = {};
+    buys.forEach(b => {
       runBtc += b.btcBought; runInvested += b.usdtSpent;
-      return { date: b.date, avg: runInvested / runBtc };
+      buyByDate[b.date] = { avg: runInvested / runBtc, price: b.price };
     });
-    let buyIdx = 0, lastAvg = null;
-    const mapped = sim.enriched.map(w => {
-      let isBuy = false;
-      while (buyIdx < buyEvents.length && buyEvents[buyIdx].date <= w.date) {
-        lastAvg = buyEvents[buyIdx].avg;
-        isBuy   = true;
-        buyIdx++;
-      }
-      return { ...w, avgBuyPrice: lastAvg, bought: isBuy };
+
+    // Merge: hybridWeekly dates + real buy dates, sorted
+    const weeklyByDate = Object.fromEntries(sim.enriched.map(w => [w.date, w]));
+    const allDates = [...new Set([...sim.enriched.map(w => w.date), ...buys.map(b => b.date)])].sort();
+
+    let lastAvg = null;
+    return allDates.map(date => {
+      const w   = weeklyByDate[date];
+      const buy = buyByDate[date];
+      if (buy) lastAvg = buy.avg;
+      return {
+        date,
+        price:        buy?.price ?? w?.price,
+        ath:          w?.ath          ?? null,
+        triggerPrice: w?.triggerPrice ?? null,
+        dip:          w?.dip          ?? null,
+        ma7:          w?.ma7          ?? null,
+        avgBuyPrice:  lastAvg,
+        bought:       !!buy,
+      };
     });
-    // Append buys that fall after the last hybridWeekly entry
-    while (buyIdx < buyEvents.length) {
-      const b = buyEvents[buyIdx];
-      lastAvg = b.avg;
-      mapped.push({ date: b.date, price: sortedBuys[buyIdx].price, ath: null, triggerPrice: null, dip: null, ma7: null, avgBuyPrice: lastAvg, bought: true });
-      buyIdx++;
-    }
-    return mapped;
   }, [isLive, liveStats, sim.enriched]);
 
   const chartData = isLive ? (liveChartData ?? sim.enriched) : sim.enriched;

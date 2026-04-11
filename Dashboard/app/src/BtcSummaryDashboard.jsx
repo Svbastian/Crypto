@@ -76,31 +76,29 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
     // Chart: in live mode, dots come from real buys only; in demo, from backtest simulation
     let avgLine;
     if (showLive) {
-      // Real buy dates (Mondays) don't match hybridWeekly dates (Saturdays) — use forward scan
+      // One dot per real buy log entry at its exact date
       const realBuys = [...maEnriched, ...athEnriched]
         .sort((a, b) => a.date.localeCompare(b.date));
       let runBtc = 0, runInvested = 0;
-      const buyEvents = realBuys.map(b => {
+      const buyByDate = {};
+      realBuys.forEach(b => {
         runBtc += b.btcBought; runInvested += b.usdtSpent;
-        return { date: b.date, avg: runInvested / runBtc, bot: b.bot };
+        buyByDate[b.date] = { avg: runInvested / runBtc, bot: b.bot, price: b.price };
       });
-      let buyIdx = 0, lastAvg = null;
-      avgLine = hybridWeekly.map(w => {
-        let dotBot = null;
-        while (buyIdx < buyEvents.length && buyEvents[buyIdx].date <= w.date) {
-          lastAvg = buyEvents[buyIdx].avg;
-          dotBot  = buyEvents[buyIdx].bot;
-          buyIdx++;
-        }
-        return { date: w.date, btcPrice: w.btcPrice, avgBuyPrice: lastAvg, bot: dotBot };
+      const weeklyByDate = Object.fromEntries(hybridWeekly.map(w => [w.date, w]));
+      const allDates = [...new Set([...hybridWeekly.map(w => w.date), ...realBuys.map(b => b.date)])].sort();
+      let lastAvg = null;
+      avgLine = allDates.map(date => {
+        const w   = weeklyByDate[date];
+        const buy = buyByDate[date];
+        if (buy) lastAvg = buy.avg;
+        return {
+          date,
+          btcPrice:    buy?.price ?? w?.btcPrice,
+          avgBuyPrice: lastAvg,
+          bot:         buy?.bot ?? null,
+        };
       });
-      // Append buys that fall after the last hybridWeekly entry
-      while (buyIdx < buyEvents.length) {
-        const b = buyEvents[buyIdx];
-        lastAvg = b.avg;
-        avgLine.push({ date: b.date, btcPrice: realBuys[buyIdx].price, avgBuyPrice: lastAvg, bot: b.bot });
-        buyIdx++;
-      }
     } else {
       avgLine = hybridWeekly.map(w => ({
         date: w.date, btcPrice: w.btcPrice, avgBuyPrice: w.avgBuyPrice,
