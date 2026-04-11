@@ -346,7 +346,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
                 <div>
                   <CardTitle className="text-lg">BTC Price vs Avg Buy Price</CardTitle>
                   <p className="mt-1 text-sm text-slate-500">
-                    Orange = BTC price. Green = 7d MA. Blue stepped = ATH-DCA running average buy price (updates on each simulated buy).
+                    Orange = BTC price. Green = 7d MA. Green dashed = ATH-DCA buy trigger (-15% from ATH). Blue stepped = running avg buy price.
                   </p>
                 </div>
                 <RangeDropdown value={rangeAvg} onChange={setRangeAvg} />
@@ -362,6 +362,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
                     <Tooltip formatter={(v, name) => [formatUsd(v), name]} labelFormatter={l => `Week of ${l}`} />
                     <Line type="monotone"   dataKey="price"        stroke="#f97316" strokeWidth={2.5} dot={false} name="BTC Price" />
                     <Line type="monotone"   dataKey="ma7"          stroke="#16a34a" strokeWidth={1.5} dot={false} name="7d MA" strokeDasharray="4 2" />
+                    <Line type="monotone"   dataKey="triggerPrice" stroke="#10b981" strokeWidth={1.5} dot={false} name="ATH Trigger -15%" strokeDasharray="6 3" />
                     <Line type="stepAfter"  dataKey="avgBuyPrice"  stroke="#2563eb" strokeWidth={2}   dot={false} name="Avg Buy Price" connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
@@ -369,6 +370,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
               <div className="mt-3 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500">
                 <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-orange-400" /> BTC Price</div>
                 <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-green-600" /> 7d MA</div>
+                <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-emerald-500" /> ATH Trigger -15%</div>
                 <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-blue-600" /> Avg Buy Price</div>
               </div>
             </CardContent>
