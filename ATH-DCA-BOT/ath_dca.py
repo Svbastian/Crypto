@@ -25,7 +25,7 @@ email_receiver = os.getenv("EMAIL_RECEIVER")
 ATH_WINDOW_DAYS = 1825   # 5 years of daily candles
 MIN_DIP         = 0.15   # start buying at -15% below rolling ATH
 BASE_USDT       = 25.0   # minimum buy at trigger (-15%)
-MAX_USDT        = 1000.0 # maximum buy (approached at extreme crashes ~-90%)
+MAX_USDT        = 500.0  # maximum buy (approached at extreme crashes ~-90%)
 POW_N           = 2.1    # power curve exponent — slow start, accelerates at deep crashes
 # Scaling: power curve ratio^2.1 — stays cheap at moderate dips (-30%: ~$50),
 # ramps hard at extreme crashes (-70%: ~$400, -90%: ~$775)

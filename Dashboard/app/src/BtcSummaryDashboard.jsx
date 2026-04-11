@@ -13,25 +13,28 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
 
   const filterByRange = (arr) => {
     if (range === 'all') return arr;
-    const days = range === '30d' ? 30 : 7;
+    const days = range === '30d' ? 30 : range === '1y' ? 365 : 730;
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
     return arr.filter(item => (item.date || '') >= cutoffStr);
   };
 
-  const xInterval = range === '7d' ? 1 : range === '30d' ? 4 : 20;
-  const xFmt = v => { const [,m,d] = v.split('-'); const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${mon[+m-1]} ${+d}`; };
+  const xInterval = range === '30d' ? 1 : range === '1y' ? 7 : range === '2y' ? 13 : 25;
+  const xFmt = v => {
+    const [y, m, d] = v.split('-');
+    const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return range === '30d' ? `${mon[+m-1]} ${+d}` : `${mon[+m-1]} '${y.slice(2)}`;
+  };
 
-  const RangeToggle = () => (
-    <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-      {[['All time','all'],['30d','30d'],['7d','7d']].map(([label, val]) => (
-        <button key={val} onClick={() => setRange(val)}
-          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === val ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-          {label}
-        </button>
-      ))}
-    </div>
+  const RangeDropdown = () => (
+    <select value={range} onChange={e => setRange(e.target.value)}
+      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300">
+      <option value="all">All time</option>
+      <option value="2y">2y</option>
+      <option value="1y">1y</option>
+      <option value="30d">30d</option>
+    </select>
   );
 
   // In live mode use real data; in demo mode use hybrid backtest
@@ -146,7 +149,7 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
                   <CardTitle className="text-lg">BTC Price vs Running Average Buy Price</CardTitle>
                   <p className="mt-1 text-sm text-slate-500">Orange = BTC price. Blue = combined average buy price stepping up with each purchase. Dots mark individual buys.</p>
                 </div>
-                <RangeToggle />
+                <RangeDropdown />
               </div>
             </CardHeader>
             <CardContent>

@@ -30,7 +30,7 @@ MIN_DIP         = 0.15    # ≥15% below rolling ATH → ATH mode; <15% → MA m
 
 # ATH mode
 ATH_BASE_USDT  = 25.0
-ATH_MAX_USDT   = 1000.0
+ATH_MAX_USDT   = 500.0
 ATH_POW_N      = 2.1
 ATH_MAX_RETAIN = 5        # retained-week cap for ATH mode only
 

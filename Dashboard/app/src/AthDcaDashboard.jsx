@@ -4,18 +4,19 @@ import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, Zap, ListOrdered, Ba
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, AreaChart, Area } from 'recharts';
 import { hybridWeekly, hybridAthBuys } from './data/hybridBacktest';
 
-// === Algorithm constants (must match ath_dca.py exactly) ===
-const MIN_DIP   = 0.15;   // trigger at -15% below rolling ATH
-const BASE_USDT = 25;     // buy size at trigger
-const MAX_USDT  = 1000;   // maximum buy (approached at extreme crashes ~-90%)
-const POW_N     = 2.1;    // power curve exponent — slow start, accelerates at deep crashes
+// === Algorithm constants ===
+const MIN_DIP      = 0.15;   // trigger at -15% below rolling ATH
+const BASE_USDT    = 25;     // buy size at trigger
+const MAX_USDT     = 1000;   // demo/backtest max — kept at 1000 so historic simulation is unchanged
+const LIVE_MAX_USDT = 500;   // live mode max — real bot config (dispatcher.py ATH_MAX_USDT)
+const POW_N        = 2.1;    // power curve exponent
 
-function computeBuySize(price, ath) {
+function computeBuySize(price, ath, maxUsdt = MAX_USDT) {
   const dip = (ath - price) / ath;
   if (dip < MIN_DIP) return null;
   const ratio    = Math.min((dip - MIN_DIP) / (1.0 - MIN_DIP), 1.0);
   const powRatio = Math.pow(ratio, POW_N);
-  return Math.round(BASE_USDT + powRatio * (MAX_USDT - BASE_USDT));
+  return Math.round(BASE_USDT + powRatio * (maxUsdt - BASE_USDT));
 }
 
 export default function AthDcaDashboard({ liveData = null, isLive = false }) {
@@ -55,19 +56,18 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
   const xFmt = v => {
     const [y, m, d] = v.split('-');
     const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return range === 'all' ? `${mon[+m-1]} '${y.slice(2)}` : `${mon[+m-1]} ${+d}`;
+    return range === '30d' ? `${mon[+m-1]} ${+d}` : `${mon[+m-1]} '${y.slice(2)}`;
   };
-  const xInterval = range === '3m' ? 3 : range === '6m' ? 6 : 25;
+  const xInterval = range === '30d' ? 1 : range === '1y' ? 7 : range === '2y' ? 13 : 25;
 
-  const RangeToggle = () => (
-    <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-      {[['All time','all'],['6m','6m'],['3m','3m']].map(([label, val]) => (
-        <button key={val} onClick={() => setRange(val)}
-          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${range === val ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-          {label}
-        </button>
-      ))}
-    </div>
+  const RangeDropdown = ({ value, onChange, extraClass = '' }) => (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      className={`rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300 ${extraClass}`}>
+      <option value="all">All time</option>
+      <option value="2y">2y</option>
+      <option value="1y">1y</option>
+      <option value="30d">30d</option>
+    </select>
   );
 
   // Hybrid dispatcher backtest — ATH mode only (with shared retained weeks, capped at 5)
@@ -102,22 +102,17 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
     return { enriched, buyEvents, totalInvested, totalBtc, positionValue, pnl, pnlPct, avgBuyPrice, currentAth, currentDip, currentBuySize };
   }, [currentPrice]);
 
-  // Buy curve — dip 0–90%, showing power curve shape
-  const buyCurve = useMemo(() => Array.from({ length: 91 }, (_, dipPct) => {
-    const dip = dipPct / 100;
-    if (dip < MIN_DIP) return { dip: dipPct, buySize: null };
-    const ratio    = Math.min((dip - MIN_DIP) / (1.0 - MIN_DIP), 1.0);
-    const powRatio = Math.pow(ratio, POW_N);
-    return { dip: dipPct, buySize: Math.round(BASE_USDT + powRatio * (MAX_USDT - BASE_USDT)) };
-  }), []);
-
-  const filterByRange = arr => {
-    if (range === 'all') return arr;
-    const months = range === '6m' ? 6 : 3;
-    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - months);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-    return arr.filter(item => (item.date || '') >= cutoffStr);
-  };
+  // Buy curve — dip 0–90%, showing power curve shape (uses live max in live mode)
+  const buyCurve = useMemo(() => {
+    const maxUsdt = isLive ? LIVE_MAX_USDT : MAX_USDT;
+    return Array.from({ length: 91 }, (_, dipPct) => {
+      const dip = dipPct / 100;
+      if (dip < MIN_DIP) return { dip: dipPct, buySize: null };
+      const ratio    = Math.min((dip - MIN_DIP) / (1.0 - MIN_DIP), 1.0);
+      const powRatio = Math.pow(ratio, POW_N);
+      return { dip: dipPct, buySize: Math.round(BASE_USDT + powRatio * (maxUsdt - BASE_USDT)) };
+    });
+  }, [isLive]);
 
   const filterByDays = (arr, r) => {
     if (r === 'all') return arr;
@@ -127,22 +122,14 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
     return arr.filter(item => (item.date || '') >= cutoffStr);
   };
 
-  const avgXInterval = rangeAvg === '30d' ? 1 : rangeAvg === '1y' ? 8 : rangeAvg === '2y' ? 13 : 25;
+  const filterByRange = arr => filterByDays(arr, range);
+
+  const avgXInterval = rangeAvg === '30d' ? 1 : rangeAvg === '1y' ? 7 : rangeAvg === '2y' ? 13 : 25;
   const avgXFmt = v => {
     const [y, m, d] = v.split('-');
     const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return rangeAvg === '30d' ? `${mon[+m-1]} ${+d}` : `${mon[+m-1]} '${y.slice(2)}`;
   };
-
-  const RangeDropdown = ({ value, onChange }) => (
-    <select value={value} onChange={e => onChange(e.target.value)}
-      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300">
-      <option value="30d">30d</option>
-      <option value="1y">1y</option>
-      <option value="2y">2y</option>
-      <option value="all">All time</option>
-    </select>
-  );
 
   const formatUsd = v => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v);
   const formatBtc = v => `${v.toFixed(6)} BTC`;
@@ -205,7 +192,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
                 <div><p className="text-slate-500">Current Price</p><p className="font-bold text-slate-900">{formatUsd(currentPrice)}</p></div>
                 <div><p className="text-slate-500">5yr Rolling ATH</p><p className="font-bold text-slate-900">{formatUsd(sim.currentAth)}</p></div>
                 <div><p className="text-slate-500">Dip from ATH</p><p className={`font-bold ${inBuyZone ? 'text-emerald-600' : 'text-slate-500'}`}>{sim.currentDip.toFixed(1)}%</p></div>
-                <div><p className="text-slate-500">Would Buy</p><p className={`font-bold ${inBuyZone ? 'text-emerald-600' : 'text-slate-400'}`}>{sim.currentBuySize ? formatUsd(sim.currentBuySize) : '—'}</p></div>
+                <div><p className="text-slate-500">Would Buy</p><p className={`font-bold ${inBuyZone ? 'text-emerald-600' : 'text-slate-400'}`}>{sim.currentBuySize ? formatUsd(isLive ? computeBuySize(currentPrice, sim.currentAth, LIVE_MAX_USDT) : sim.currentBuySize) : '—'}</p></div>
               </div>
             </div>
           </CardContent>
@@ -241,7 +228,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
                   Orange = BTC price. Grey dashed = rolling ATH. Green dashed = buy trigger (-15%). Purple dots = simulated buys.
                 </p>
               </div>
-              <RangeToggle />
+              <RangeDropdown value={range} onChange={setRange} />
             </div>
           </CardHeader>
           <CardContent>
@@ -308,7 +295,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
               <div className="mt-3 grid grid-cols-5 gap-2 text-center text-xs">
                 {[15, 25, 40, 55, 70].map(dipPct => {
                   const fakePrice = sim.currentAth * (1 - dipPct / 100);
-                  const size = computeBuySize(fakePrice, sim.currentAth);
+                  const size = computeBuySize(fakePrice, sim.currentAth, isLive ? LIVE_MAX_USDT : MAX_USDT);
                   const isNow = Math.abs(dipPct - sim.currentDip) < 5;
                   return (
                     <div key={dipPct} className={`rounded-lg p-2 ${isNow ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}`}>
@@ -331,7 +318,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
                     Orange = BTC price. Green = 7d MA. Green dashed = ATH-DCA buy trigger (-15% from ATH). Blue stepped = running avg buy price.
                   </p>
                 </div>
-                <RangeDropdown value={rangeAvg} onChange={setRangeAvg} />
+                <RangeDropdown value={rangeAvg} onChange={setRangeAvg} extraClass="ml-2" />
               </div>
             </CardHeader>
             <CardContent>
@@ -371,7 +358,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
                 ['ATH Window', '5 years', '1,825 daily candles'],
                 ['Buy Trigger', '-15% from ATH', `currently ${formatUsd(sim.currentAth * 0.85)}`],
                 ['Min Buy', '$25', 'at exactly -15%'],
-                ['Max Buy', '$1,000', 'approached at extreme crashes'],
+                ['Max Buy', isLive ? '$500' : '$1,000', isLive ? 'live mode cap' : 'demo/backtest cap'],
                 ['Curve', 'Power curve', `exponent n=${POW_N}`],
               ].map(([label, val, sub]) => (
                 <div key={label} className="rounded-xl bg-slate-50 p-4">
