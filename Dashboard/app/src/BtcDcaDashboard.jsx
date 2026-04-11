@@ -69,6 +69,35 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
     ma200: 4.5,
   };
 
+  // Live chart data — built from real buy log; forward-scan maps Monday buys onto Saturday hybridWeekly entries
+  const liveChartData = useMemo(() => {
+    if (!liveStats) return null;
+    const sortedBuys = [...liveStats.buys].sort((a, b) => a.date.localeCompare(b.date));
+    let runBtc = 0, runInvested = 0;
+    const buyEvents = sortedBuys.map(b => {
+      runBtc += b.btcBought; runInvested += b.usdtSpent;
+      return { date: b.date, avg: runInvested / runBtc, price: b.price };
+    });
+    let buyIdx = 0, lastAvg = null;
+    const mapped = hybridWeekly.map(w => {
+      let isBuy = false;
+      while (buyIdx < buyEvents.length && buyEvents[buyIdx].date <= w.date) {
+        lastAvg = buyEvents[buyIdx].avg;
+        isBuy   = true;
+        buyIdx++;
+      }
+      return { date: w.date, btcPrice: w.btcPrice, ma7: w.ma7, ma30: w.ma30, ma100: w.ma100, ma200: w.ma200, avgBuyPrice: lastAvg };
+    });
+    // Append buys that fall after the last hybridWeekly entry
+    while (buyIdx < buyEvents.length) {
+      const b = buyEvents[buyIdx];
+      lastAvg = b.avg;
+      mapped.push({ date: b.date, btcPrice: b.price, ma7: null, ma30: null, ma100: null, ma200: null, avgBuyPrice: lastAvg });
+      buyIdx++;
+    }
+    return mapped;
+  }, [liveStats]);
+
   // Hybrid dispatcher backtest — MA mode only (ATH mode buys shown in ATH-DCA dashboard)
   const simulation = useMemo(() => {
     const buyEvents = hybridMaBuys;
@@ -226,7 +255,7 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
                 <CardContent>
                   <div className="h-[380px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={filterByRange(liveData?.chartData || simulation.chartData)}>
+                      <LineChart data={filterByRange(liveChartData || simulation.chartData)}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={xFmt} interval={xInterval} />
                         <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `$${Math.round(value / 1000)}k`} domain={['dataMin - 4000', 'dataMax + 4000']} />
@@ -311,7 +340,7 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
                 <CardContent>
                   <div className="h-[380px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={filterByRange(liveData?.chartData || simulation.chartData)}>
+                      <LineChart data={filterByRange(liveChartData || simulation.chartData)}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                         <XAxis dataKey="date" tick={{ fontSize: 12 }} tickFormatter={xFmt} interval={xInterval} />
                         <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => `$${Math.round(value / 1000)}k`} domain={['dataMin - 4000', 'dataMax + 4000']} />

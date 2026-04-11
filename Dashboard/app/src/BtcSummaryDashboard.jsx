@@ -51,7 +51,11 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
       : hybridMaBuys.map(e => ({ ...e, bot: 'MA' }));
 
     const athEnriched = showLive
-      ? []
+      ? (liveData.athBuys || []).map(e => ({
+          date: (e.timestamp || '').slice(0, 10), price: e.price,
+          usdtSpent: e.usdt_spent, btcBought: e.btc_bought,
+          ath: e.rolling_ath, dip: e.dip_pct, bot: 'ATH',
+        }))
       : hybridAthBuys.map(e => ({ ...e, bot: 'ATH' }));
 
     const all = [...maEnriched, ...athEnriched].sort((a, b) => a.date.localeCompare(b.date));
@@ -69,13 +73,40 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
     const pnl           = positionValue - totalInvested;
     const pnlPct        = (pnl / totalInvested) * 100;
 
-    // Chart: use pre-computed hybrid weekly avg line
-    const avgLine = hybridWeekly.map(w => ({
-      date:        w.date,
-      btcPrice:    w.btcPrice,
-      avgBuyPrice: w.avgBuyPrice,
-      bot:         w.mode !== 'none' ? w.mode : null,
-    }));
+    // Chart: in live mode, dots come from real buys only; in demo, from backtest simulation
+    let avgLine;
+    if (showLive) {
+      // Real buy dates (Mondays) don't match hybridWeekly dates (Saturdays) — use forward scan
+      const realBuys = [...maEnriched, ...athEnriched]
+        .sort((a, b) => a.date.localeCompare(b.date));
+      let runBtc = 0, runInvested = 0;
+      const buyEvents = realBuys.map(b => {
+        runBtc += b.btcBought; runInvested += b.usdtSpent;
+        return { date: b.date, avg: runInvested / runBtc, bot: b.bot };
+      });
+      let buyIdx = 0, lastAvg = null;
+      avgLine = hybridWeekly.map(w => {
+        let dotBot = null;
+        while (buyIdx < buyEvents.length && buyEvents[buyIdx].date <= w.date) {
+          lastAvg = buyEvents[buyIdx].avg;
+          dotBot  = buyEvents[buyIdx].bot;
+          buyIdx++;
+        }
+        return { date: w.date, btcPrice: w.btcPrice, avgBuyPrice: lastAvg, bot: dotBot };
+      });
+      // Append buys that fall after the last hybridWeekly entry
+      while (buyIdx < buyEvents.length) {
+        const b = buyEvents[buyIdx];
+        lastAvg = b.avg;
+        avgLine.push({ date: b.date, btcPrice: realBuys[buyIdx].price, avgBuyPrice: lastAvg, bot: b.bot });
+        buyIdx++;
+      }
+    } else {
+      avgLine = hybridWeekly.map(w => ({
+        date: w.date, btcPrice: w.btcPrice, avgBuyPrice: w.avgBuyPrice,
+        bot: w.mode !== 'none' ? w.mode : null,
+      }));
+    }
 
     // Monthly spend breakdown
     const monthMap = {};

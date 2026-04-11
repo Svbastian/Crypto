@@ -150,6 +150,29 @@ The dashboard (`Dashboard/app/src/`) reads the buy logs from both bots:
 
 In demo mode, all three dashboards simulate the hybrid dispatcher logic using 4yr real weekly BTC data (Apr 2022 – Apr 2026), pre-computed in `Dashboard/app/src/data/hybridBacktest.js`.
 
+### Live mode chart sync
+
+In live mode, all chart dots (buy markers) and the running avg buy price line are built exclusively from the real buy logs — never from the backtest simulation data.
+
+**Date alignment:** `hybridBacktest.js` weekly entries fall on Saturdays (the backtest started on 2022-04-09). The real bot buys happen on Mondays. These dates never match exactly, so a **forward-scan** is used:
+
+```
+for each Saturday entry in hybridWeekly:
+    include all real buys with date <= this Saturday
+    → last included buy sets the dot marker and updates running avg
+after the loop:
+    any buys after the last Saturday are appended as extra chart points
+```
+
+This means each Monday buy is attributed to the next Saturday's chart slot, giving the correct visual position. The running avg buy price line steps up at each real buy and is held flat between buys using `connectNulls`.
+
+**Per dashboard:**
+- `BtcSummaryDashboard.jsx` — `avgLine` in live mode: forward-scans `liveData.dcaBuys` + `liveData.athBuys`
+- `AthDcaDashboard.jsx` — `liveChartData` useMemo: forward-scans `liveData.athBuys`
+- `BtcDcaDashboard.jsx` — `liveChartData` useMemo: forward-scans `liveData.dcaBuys`
+
+If a buy falls after the last hybridWeekly entry (i.e. more recent than the backtest end date), it is appended as a new chart point using the buy's actual price as the BTC price.
+
 **Backtest results (4yr):**
 - 141 ATH mode buys, 41 MA mode buys, 27 no-buy weeks
 - $33,693 total invested, 1.327 BTC accumulated

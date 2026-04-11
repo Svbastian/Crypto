@@ -102,6 +102,38 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
     return { enriched, buyEvents, totalInvested, totalBtc, positionValue, pnl, pnlPct, avgBuyPrice, currentAth, currentDip, currentBuySize };
   }, [currentPrice]);
 
+  // Live chart data — built from real buy log; no simulated dots in live mode
+  const liveChartData = useMemo(() => {
+    if (!isLive) return null;
+    // Real buy dates (Mondays) don't match hybridWeekly dates (Saturdays) — use forward scan
+    const sortedBuys = [...(liveStats?.buys || [])].sort((a, b) => a.date.localeCompare(b.date));
+    let runBtc = 0, runInvested = 0;
+    const buyEvents = sortedBuys.map(b => {
+      runBtc += b.btcBought; runInvested += b.usdtSpent;
+      return { date: b.date, avg: runInvested / runBtc };
+    });
+    let buyIdx = 0, lastAvg = null;
+    const mapped = sim.enriched.map(w => {
+      let isBuy = false;
+      while (buyIdx < buyEvents.length && buyEvents[buyIdx].date <= w.date) {
+        lastAvg = buyEvents[buyIdx].avg;
+        isBuy   = true;
+        buyIdx++;
+      }
+      return { ...w, avgBuyPrice: lastAvg, bought: isBuy };
+    });
+    // Append buys that fall after the last hybridWeekly entry
+    while (buyIdx < buyEvents.length) {
+      const b = buyEvents[buyIdx];
+      lastAvg = b.avg;
+      mapped.push({ date: b.date, price: sortedBuys[buyIdx].price, ath: null, triggerPrice: null, dip: null, ma7: null, avgBuyPrice: lastAvg, bought: true });
+      buyIdx++;
+    }
+    return mapped;
+  }, [isLive, liveStats, sim.enriched]);
+
+  const chartData = isLive ? (liveChartData ?? sim.enriched) : sim.enriched;
+
   // Buy curve — dip 0–90%, showing power curve shape (uses live max in live mode)
   const buyCurve = useMemo(() => {
     const maxUsdt = isLive ? LIVE_MAX_USDT : MAX_USDT;
@@ -225,7 +257,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
               <div>
                 <CardTitle className="text-lg">BTC Price vs 5yr Rolling ATH</CardTitle>
                 <p className="mt-1 text-sm text-slate-500">
-                  Orange = BTC price. Grey dashed = rolling ATH. Green dashed = buy trigger (-15%). Purple dots = simulated buys.
+                  Orange = BTC price. Grey dashed = rolling ATH. Green dashed = buy trigger (-15%). Purple dots = {isLive ? 'real buys' : 'simulated buys'}.
                 </p>
               </div>
               <RangeDropdown value={range} onChange={setRange} />
@@ -234,7 +266,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
           <CardContent>
             <div className="h-[420px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={filterByRange(sim.enriched)}>
+                <LineChart data={filterByRange(chartData)}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={xFmt} interval={xInterval} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 5000', 'dataMax + 5000']} />
@@ -324,7 +356,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
             <CardContent>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={filterByDays(sim.enriched, rangeAvg)}>
+                  <LineChart data={filterByDays(chartData, rangeAvg)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={avgXFmt} interval={avgXInterval} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 3000', 'dataMax + 3000']} />
