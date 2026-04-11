@@ -21,6 +21,7 @@ function computeBuySize(price, ath) {
 export default function AthDcaDashboard({ liveData = null, isLive = false }) {
   const [activeTab, setActiveTab] = useState('overview');
   const [range, setRange] = useState('all');
+  const [rangeAvg, setRangeAvg] = useState('all');
 
   const TabButton = ({ id, label, icon: Icon }) => (
     <button onClick={() => setActiveTab(id)}
@@ -135,6 +136,31 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
     const cutoffStr = cutoff.toISOString().slice(0, 10);
     return arr.filter(item => (item.date || '') >= cutoffStr);
   };
+
+  const filterByDays = (arr, r) => {
+    if (r === 'all') return arr;
+    const days = r === '7d' ? 7 : r === '30d' ? 30 : 100;
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    return arr.filter(item => (item.date || '') >= cutoffStr);
+  };
+
+  const avgXInterval = rangeAvg === '7d' ? 0 : rangeAvg === '30d' ? 1 : rangeAvg === '100d' ? 2 : 25;
+  const avgXFmt = v => {
+    const [y, m, d] = v.split('-');
+    const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return rangeAvg === 'all' ? `${mon[+m-1]} '${y.slice(2)}` : `${mon[+m-1]} ${+d}`;
+  };
+
+  const RangeDropdown = ({ value, onChange }) => (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300">
+      <option value="7d">7d</option>
+      <option value="30d">30d</option>
+      <option value="100d">100d</option>
+      <option value="all">All time</option>
+    </select>
+  );
 
   const formatUsd = v => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v);
   const formatBtc = v => `${v.toFixed(6)} BTC`;
@@ -316,17 +342,22 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
           {/* BTC price + 7d MA + ATH-DCA avg buy price */}
           <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
             <CardHeader>
-              <CardTitle className="text-lg">BTC Price vs Avg Buy Price</CardTitle>
-              <p className="text-sm text-slate-500">
-                Orange = BTC price. Green = 7d MA. Blue stepped = ATH-DCA running average buy price (updates on each simulated buy).
-              </p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg">BTC Price vs Avg Buy Price</CardTitle>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Orange = BTC price. Green = 7d MA. Blue stepped = ATH-DCA running average buy price (updates on each simulated buy).
+                  </p>
+                </div>
+                <RangeDropdown value={rangeAvg} onChange={setRangeAvg} />
+              </div>
             </CardHeader>
             <CardContent>
               <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={filterByRange(sim.enriched)}>
+                  <LineChart data={filterByDays(sim.enriched, rangeAvg)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={xFmt} interval={xInterval} />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={avgXFmt} interval={avgXInterval} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 3000', 'dataMax + 3000']} />
                     <Tooltip formatter={(v, name) => [formatUsd(v), name]} labelFormatter={l => `Week of ${l}`} />
                     <Line type="monotone"   dataKey="price"        stroke="#f97316" strokeWidth={2.5} dot={false} name="BTC Price" />
