@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, Zap, ListOrdered, BarChart3 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, AreaChart, Area } from 'recharts';
-import { weeklyBacktest4yr } from './data/backtest4yr';
+import { hybridWeekly, hybridAthBuys } from './data/hybridBacktest';
 
 // === Algorithm constants (must match ath_dca.py exactly) ===
 const MIN_DIP   = 0.15;   // trigger at -15% below rolling ATH
@@ -70,45 +70,27 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
     </div>
   );
 
-  // 2-year backtest simulation using real weekly data
+  // Hybrid dispatcher backtest — ATH mode only (with shared retained weeks, capped at 5)
   const sim = useMemo(() => {
-    // Real 4yr weekly data with pre-computed 5yr rolling ATH
-    const backtestWeeks = weeklyBacktest4yr;
+    const buyEvents = hybridAthBuys.map(e => ({
+      date: e.date, price: e.price, ath: e.ath,
+      dip: e.dip, usdtSpent: e.usdtSpent, btcBought: e.btcBought,
+      buySize: e.usdtSpent, btc: e.btcBought,
+    }));
 
-    let totalInvested = 0;
-    let totalBtc = 0;
-    const buyEvents = [];
+    const totalInvested = buyEvents.reduce((s, e) => s + e.usdtSpent, 0);
+    const totalBtc      = buyEvents.reduce((s, e) => s + e.btcBought, 0);
 
-    const enriched = backtestWeeks.map(w => {
-      const price      = w.btcPrice;
-      const ath        = w.ath5yr;
-      const triggerPx  = ath * (1 - MIN_DIP);
-      const dip        = (ath - price) / ath;
-      const buySize    = computeBuySize(price, ath);
-      const bought     = buySize !== null;
+    // Enriched weekly series for charts
+    const enriched = hybridWeekly.map(w => ({
+      date: w.date, price: w.btcPrice,
+      ath: w.ath, triggerPrice: w.triggerPrice,
+      dip: w.dip, buySize: w.mode === 'ATH' ? w.usdtSpent : 0,
+      bought: w.mode === 'ATH',
+      ma7: w.ma7, avgBuyPrice: w.avgBuyPriceAth,
+    }));
 
-      if (bought) {
-        const btc = buySize / price;
-        totalInvested += buySize;
-        totalBtc += btc;
-        buyEvents.push({ date: w.date, price, ath, dip: dip * 100, buySize, btc });
-      }
-
-      const avgBuyPrice = totalBtc > 0 ? totalInvested / totalBtc : null;
-
-      return { date: w.date, price, ath, triggerPrice: triggerPx, dip: dip * 100, buySize: buySize || 0, bought, ma7: w.ma7, avgBuyPrice };
-    });
-
-    // Update last point with current live price
-    const last = enriched[enriched.length - 1];
-    if (last) {
-      const liveBuy = computeBuySize(currentPrice, last.ath);
-      last.price    = currentPrice;
-      last.dip      = ((last.ath - currentPrice) / last.ath) * 100;
-      last.buySize  = liveBuy || 0;
-      last.bought   = liveBuy !== null;
-    }
-
+    const last           = enriched[enriched.length - 1];
     const currentAth     = last?.ath || 0;
     const currentDip     = last?.dip || 0;
     const currentBuySize = computeBuySize(currentPrice, currentAth);
@@ -189,10 +171,10 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">ATH-DCA Bot</h1>
-            <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">Next Gen · 4yr Backtest</span>
+            <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">Hybrid Dispatcher · ATH Mode · 4yr Backtest</span>
           </div>
           <p className="mt-1 text-slate-600">
-            Power curve buy scaling based on distance from 5-year rolling ATH. Stays cheap at moderate dips, deploys heavily at extreme crashes.
+            Hybrid dispatcher — ATH mode. Fires when BTC is ≥15% below 5yr rolling ATH. Power curve sizing + retained weeks multiplier (capped at 5 weeks × 0.5×).
           </p>
         </div>
 

@@ -19,8 +19,8 @@ BASE_DIR         = os.path.dirname(os.path.abspath(__file__))
 DCA_LOG          = os.path.join(BASE_DIR, '..', 'BTC-DCA-BOT',   'buy_log.json')
 CRASH_LOG        = os.path.join(BASE_DIR, '..', 'BTC-Crash-BOT', 'crash_log.json')
 ATH_LOG          = os.path.join(BASE_DIR, '..', 'ATH-DCA-BOT',   'buy_log.json')
-RETAINED_FILE    = os.path.join(BASE_DIR, '..', 'BTC-DCA-BOT',   'retained.json')
-CRASH_STATE_FILE = os.path.join(BASE_DIR, '..', 'BTC-Crash-BOT', 'crash_state.json')
+RETAINED_FILE    = os.path.join(BASE_DIR, '..', 'HYBRID-DCA-BOT', 'retained.json')
+CRASH_STATE_FILE = os.path.join(BASE_DIR, '..', 'BTC-Crash-BOT',  'crash_state.json')
 
 
 def read_json(path):

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target, CalendarClock, Layers, Repeat, ListOrdered, BarChart3 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { weeklyBacktest4yr } from './data/backtest4yr';
+import { hybridWeekly, hybridMaBuys, hybridRetainedFinal } from './data/hybridBacktest';
 
 export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -66,110 +66,41 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
     ma200: 4.5,
   };
 
-  // Real 4yr weekly backtest data — fetched from Binance, MAs computed from real daily history
-  const marketSeries = weeklyBacktest4yr;
-
+  // Hybrid dispatcher backtest — MA mode only (ATH mode buys shown in ATH-DCA dashboard)
   const simulation = useMemo(() => {
-    let totalBtc = 0;
-    let totalInvested = 0;
-    let retainedPeriods = 0;
-    let runningAvg = null;
+    const buyEvents = hybridMaBuys;
 
-    const buyMap = new Map();
-    const triggerCounts = {
-      '7d MA': 0,
-      '30d MA': 0,
-      '100d MA': 0,
-      '200d MA': 0,
-    };
+    const triggerCounts = { '7d MA': 0, '30d MA': 0, '100d MA': 0, '200d MA': 0 };
+    buyEvents.forEach(b => { if (b.trigger in triggerCounts) triggerCounts[b.trigger]++; });
 
-    const buyEvents = [];
-
-    for (const point of marketSeries) {
-      retainedPeriods += 1;
-
-      const below7 = point.btcPrice < point.ma7;
-      const below30 = point.btcPrice < point.ma30;
-      const below100 = point.btcPrice < point.ma100;
-      const below200 = point.btcPrice < point.ma200;
-
-      if (!below7) {
-        buyMap.set(point.date, runningAvg);
-        continue;
-      }
-
-      let multiplier = MULTIPLIERS.ma7;
-      let trigger = '7d MA';
-
-      if (below200) {
-        multiplier = MULTIPLIERS.ma200;
-        trigger = '200d MA';
-      } else if (below100) {
-        multiplier = MULTIPLIERS.ma100;
-        trigger = '100d MA';
-      } else if (below30) {
-        multiplier = MULTIPLIERS.ma30;
-        trigger = '30d MA';
-      }
-
-      const retainedWeeksIncluded = retainedPeriods;
-      const usdtSpent = BASE_UNIT * multiplier * retainedWeeksIncluded;
-      const btcBought = usdtSpent / point.btcPrice;
-
-      totalInvested += usdtSpent;
-      totalBtc += btcBought;
-      runningAvg = totalInvested / totalBtc;
-      triggerCounts[trigger] += 1;
-
-      buyEvents.push({
-        time: `${point.date} 09:00`,
-        date: point.date,
-        price: point.btcPrice,
-        usdtSpent,
-        btcBought,
-        trigger,
-        retainedWeeksIncluded,
-        baseUnit: BASE_UNIT,
-        multiplier,
-        formulaText: `${retainedWeeksIncluded} × $${BASE_UNIT} × ${multiplier}`,
-      });
-
-      retainedPeriods = 0;
-      buyMap.set(point.date, runningAvg);
-    }
-
-    const chartData = marketSeries.map((point) => ({
-      ...point,
-      avgBuyPrice: buyMap.get(point.date) ?? null,
+    // Chart data: use MA-specific running average so ATH-mode buys don't influence this line
+    const chartData = hybridWeekly.map(w => ({
+      date: w.date, btcPrice: w.btcPrice,
+      ma7: w.ma7, ma30: w.ma30, ma100: w.ma100, ma200: w.ma200,
+      avgBuyPrice: w.avgBuyPriceMa,
     }));
 
-    const latestBuy = buyEvents[buyEvents.length - 1];
-    const currentPrice = marketSeries[marketSeries.length - 1].btcPrice;
-    const avgBuyPrice = totalInvested / totalBtc;
+    const totalInvested = buyEvents.reduce((s, e) => s + e.usdtSpent, 0);
+    const totalBtc      = buyEvents.reduce((s, e) => s + e.btcBought, 0);
+    const currentPrice  = hybridWeekly[hybridWeekly.length - 1].btcPrice;
+    const avgBuyPrice   = totalInvested / totalBtc;
     const positionValue = totalBtc * currentPrice;
-    const pnl = positionValue - totalInvested;
-    const pnlPct = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
+    const pnl           = positionValue - totalInvested;
+    const pnlPct        = totalInvested > 0 ? (pnl / totalInvested) * 100 : 0;
+    const latestBuy     = buyEvents[buyEvents.length - 1];
 
-    const skippedPeriods = marketSeries.length - buyEvents.length;
-    const totalWeeksRolledForward = buyEvents.reduce((sum, buy) => sum + (buy.retainedWeeksIncluded - 1), 0);
-    const pendingRetentionUsd = retainedPeriods * BASE_UNIT;
+    const athWeeks      = hybridWeekly.filter(w => w.mode === 'ATH').length;
+    const noTriggerWeeks = hybridWeekly.filter(w => w.mode === 'none').length;
+    const totalWeeksRolledForward = buyEvents.reduce((sum, b) => sum + (b.retainedWeeksIncluded - 1), 0);
 
     return {
-      buyEvents,
-      triggerCounts,
-      chartData,
-      latestBuy,
-      currentPrice,
-      totalBtc,
-      totalInvested,
-      avgBuyPrice,
-      positionValue,
-      pnl,
-      pnlPct,
-      skippedPeriods,
+      buyEvents, triggerCounts, chartData, latestBuy, currentPrice,
+      totalBtc, totalInvested, avgBuyPrice, positionValue, pnl, pnlPct,
+      skippedPeriods: noTriggerWeeks,
+      athModeWeeks: athWeeks,
       totalWeeksRolledForward,
-      pendingRetentionUsd,
-      pendingRetentionWeeks: retainedPeriods,
+      pendingRetentionUsd: hybridRetainedFinal * BASE_UNIT,
+      pendingRetentionWeeks: hybridRetainedFinal,
       buysCount: buyEvents.length,
     };
   }, []);
@@ -244,7 +175,7 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
             <p className="mt-1 text-slate-600">
               {isLive
                 ? 'Live data from your DCA bot — real buys, real prices, real performance.'
-                : 'Mock simulation of your BTC bot with a 25 USD base unit, buy gating below the 7d MA, dynamic sizing by moving average depth, and retained weeks rolled into the next executed order.'}
+                : 'Hybrid dispatcher — MA mode. Activates when BTC is within 15% of its 5yr rolling ATH. Retained weeks accumulate (no cap) and roll into the next executed order.'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -350,10 +281,11 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
                       <div className="flex items-center justify-between"><span>Total Buys</span><span className="font-medium">{liveStats.buys.length}</span></div>
                       <div className="flex items-center justify-between"><span>Base Unit</span><span className="font-medium">{formatUsd(BASE_UNIT)}</span></div>
                     </>) : (<>
-                      <div className="flex items-center justify-between"><span>Skipped Periods</span><span className="font-medium">{simulation.skippedPeriods}</span></div>
-                      <div className="flex items-center justify-between"><span>Rolled Forward Weeks</span><span className="font-medium">{simulation.totalWeeksRolledForward}</span></div>
+                      <div className="flex items-center justify-between"><span>MA buys</span><span className="font-medium">{simulation.buysCount}</span></div>
+                      <div className="flex items-center justify-between"><span>ATH mode weeks</span><span className="font-medium text-violet-600">{simulation.athModeWeeks}</span></div>
+                      <div className="flex items-center justify-between"><span>No-trigger weeks</span><span className="font-medium">{simulation.skippedPeriods}</span></div>
+                      <div className="flex items-center justify-between"><span>Rolled Forward</span><span className="font-medium">{simulation.totalWeeksRolledForward} wks</span></div>
                       <div className="flex items-center justify-between"><span>Pending Retention</span><span className="font-medium">{formatUsd(simulation.pendingRetentionUsd)}</span></div>
-                      <div className="flex items-center justify-between"><span>Base Unit</span><span className="font-medium">{formatUsd(BASE_UNIT)}</span></div>
                     </>)}
                   </CardContent>
                 </Card>
@@ -396,13 +328,13 @@ export default function BtcDcaDashboard({ liveData = null, isLive = false }) {
               {!liveStats && (
               <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
                 <CardHeader>
-                  <CardTitle className="text-lg">How the Mock Logic Was Simulated</CardTitle>
+                  <CardTitle className="text-lg">Hybrid Dispatcher — MA Mode</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm text-slate-700">
-                  <div className="flex items-start gap-2"><CalendarClock className="mt-0.5 h-4 w-4 text-slate-500" /><span>Each period adds one retained week to the counter.</span></div>
-                  <div className="flex items-start gap-2"><Repeat className="mt-0.5 h-4 w-4 text-slate-500" /><span>If BTC is not below the 7d MA, no buy happens and the week rolls forward.</span></div>
-                  <div className="flex items-start gap-2"><Layers className="mt-0.5 h-4 w-4 text-slate-500" /><span>When a buy executes, the multiplier is applied to all retained weeks plus the current week.</span></div>
-                  <div className="flex items-start gap-2"><Target className="mt-0.5 h-4 w-4 text-slate-500" /><span>Executed amount = retained weeks included × 25 USD × active multiplier.</span></div>
+                  <div className="flex items-start gap-2"><CalendarClock className="mt-0.5 h-4 w-4 text-slate-500" /><span>MA mode only activates when BTC is within 15% of the 5yr rolling ATH.</span></div>
+                  <div className="flex items-start gap-2"><Repeat className="mt-0.5 h-4 w-4 text-slate-500" /><span>If price is above all MAs, the week is skipped and retained counter grows.</span></div>
+                  <div className="flex items-start gap-2"><Layers className="mt-0.5 h-4 w-4 text-slate-500" /><span>When ATH mode fires, retained weeks reset to 0 — shared counter between both modes.</span></div>
+                  <div className="flex items-start gap-2"><Target className="mt-0.5 h-4 w-4 text-slate-500" /><span>MA buy = retained weeks × $25 × MA tier multiplier (1×–4.5×, no cap).</span></div>
                 </CardContent>
               </Card>
               )}

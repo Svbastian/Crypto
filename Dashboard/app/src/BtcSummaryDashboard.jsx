@@ -2,22 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrendingUp, TrendingDown, Wallet, Bitcoin, Target } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { dcaBuyEvents, crashBuyEvents, btcPriceSeries, CURRENT_BTC_PRICE } from './data/botData';
-import { weeklyBacktest4yr } from './data/backtest4yr';
+import { hybridWeekly, hybridMaBuys, hybridAthBuys } from './data/hybridBacktest';
 
-// ATH-DCA algorithm constants (must match ath_dca.py)
-const MIN_DIP_ATH = 0.15;
-const BASE_ATH    = 25;
-const MAX_ATH     = 1000;
-const POW_N_ATH   = 2.1;
-
-function computeAthBuySize(price, ath) {
-  const dip = (ath - price) / ath;
-  if (dip < MIN_DIP_ATH) return null;
-  const ratio    = Math.min((dip - MIN_DIP_ATH) / (1.0 - MIN_DIP_ATH), 1.0);
-  const powRatio = Math.pow(ratio, POW_N_ATH);
-  return Math.round(BASE_ATH + powRatio * (MAX_ATH - BASE_ATH));
-}
 
 export default function BtcSummaryDashboard({ liveData = null, isLive = false }) {
   const [range, setRange] = useState('all');
@@ -48,103 +34,62 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
     </div>
   );
 
-  // Normalize live DCA log entries to match botData shape
-  const normalizeDca = (e) => ({
-    date:       (e.timestamp || '').slice(0, 10),
-    price:      e.price,
-    usdtSpent:  e.usdt_spent,
-    trigger:    e.trigger || (e.units_requested ? `${e.units_requested}× buy` : 'buy'),
-    multiplier: e.units_requested || 1,
-  });
-
-  const normalizeCrash = (e) => ({
-    date:      (e.timestamp || '').slice(0, 10),
-    price:     e.price,
-    usdtSpent: e.usdt_spent,
-    dipPct:    e.dip_pct || 0,
-    tier:      e.tier || 'Crash buy',
-    units:     e.units_requested || 1,
-  });
-
-  // In live mode always use real data — never fall back to mock
-  const activeDca    = showLive ? (liveData.dcaBuys?.map(normalizeDca)     || []) : dcaBuyEvents;
-  const activeCrash  = showLive ? (liveData.crashBuys?.map(normalizeCrash) || []) : crashBuyEvents;
-  const currentPrice = showLive ? (liveData.btcPrice || 0) : CURRENT_BTC_PRICE;
-  const priceSeries  = showLive ? (liveData.chartData || []) : btcPriceSeries;
-
-  // ATH-DCA: simulate from 4yr backtest in demo mode; no live data yet
-  const activeAth = useMemo(() => {
-    if (showLive) return [];
-    return weeklyBacktest4yr.reduce((acc, w) => {
-      const size = computeAthBuySize(w.btcPrice, w.ath5yr);
-      if (size !== null) {
-        acc.push({ date: w.date, price: w.btcPrice, usdtSpent: size, btcBought: size / w.btcPrice, bot: 'ATH', dip: ((w.ath5yr - w.btcPrice) / w.ath5yr * 100).toFixed(1) });
-      }
-      return acc;
-    }, []);
-  }, [showLive]);
+  // In live mode use real data; in demo mode use hybrid backtest
+  const currentPrice = showLive ? (liveData.btcPrice || 0) : hybridWeekly[hybridWeekly.length - 1].btcPrice;
 
   const stats = useMemo(() => {
-    const dcaEnriched   = activeDca.map(e   => ({ ...e, btcBought: e.usdtSpent / e.price, bot: 'DCA'   }));
-    const crashEnriched = activeCrash.map(e => ({ ...e, btcBought: e.usdtSpent / e.price, bot: 'Crash' }));
-    const athEnriched   = activeAth;  // already has btcBought
-    const all = [...dcaEnriched, ...crashEnriched, ...athEnriched].sort((a, b) => a.date.localeCompare(b.date));
+    // Demo: hybrid dispatcher — MA mode + ATH mode with shared retained counter
+    const maEnriched  = showLive
+      ? (liveData.dcaBuys || []).map(e => ({
+          date: (e.timestamp || '').slice(0, 10), price: e.price,
+          usdtSpent: e.usdt_spent, btcBought: e.usdt_spent / e.price,
+          trigger: e.trigger || 'buy', bot: 'MA',
+        }))
+      : hybridMaBuys.map(e => ({ ...e, bot: 'MA' }));
 
-    const dcaInvested   = dcaEnriched.reduce((s, e)  => s + e.usdtSpent, 0);
-    const crashInvested = crashEnriched.reduce((s, e) => s + e.usdtSpent, 0);
-    const athInvested   = athEnriched.reduce((s, e)   => s + e.usdtSpent, 0);
-    const totalInvested = dcaInvested + crashInvested + athInvested;
+    const athEnriched = showLive
+      ? []
+      : hybridAthBuys.map(e => ({ ...e, bot: 'ATH' }));
 
-    const dcaBtc   = dcaEnriched.reduce((s, e)  => s + e.btcBought, 0);
-    const crashBtc = crashEnriched.reduce((s, e) => s + e.btcBought, 0);
-    const athBtc   = athEnriched.reduce((s, e)   => s + e.btcBought, 0);
-    const totalBtc = dcaBtc + crashBtc + athBtc;
+    const all = [...maEnriched, ...athEnriched].sort((a, b) => a.date.localeCompare(b.date));
+
+    const maInvested  = maEnriched.reduce((s, e)  => s + e.usdtSpent, 0);
+    const athInvested = athEnriched.reduce((s, e) => s + e.usdtSpent, 0);
+    const totalInvested = maInvested + athInvested;
+
+    const maBtc   = maEnriched.reduce((s, e)  => s + e.btcBought, 0);
+    const athBtc  = athEnriched.reduce((s, e) => s + e.btcBought, 0);
+    const totalBtc = maBtc + athBtc;
 
     const avgBuyPrice   = totalInvested / totalBtc;
     const positionValue = totalBtc * currentPrice;
     const pnl           = positionValue - totalInvested;
     const pnlPct        = (pnl / totalInvested) * 100;
 
-    // Build chart: merge BTC price series with running avg buy price
-    let runBtc = 0, runInvested = 0;
-    const buyByDate = {};
-    all.forEach(e => {
-      runBtc      += e.btcBought;
-      runInvested += e.usdtSpent;
-      buyByDate[e.date] = { avgBuyPrice: runInvested / runBtc, bot: e.bot };
-    });
+    // Chart: use pre-computed hybrid weekly avg line
+    const avgLine = hybridWeekly.map(w => ({
+      date:        w.date,
+      btcPrice:    w.btcPrice,
+      avgBuyPrice: w.avgBuyPrice,
+      bot:         w.mode !== 'none' ? w.mode : null,
+    }));
 
-    // Walk price series, carry forward latest avgBuyPrice
-    let lastAvg = null;
-    const avgLine = priceSeries.map(p => {
-      const isBuyDate = !!buyByDate[p.date];
-      if (isBuyDate) lastAvg = buyByDate[p.date];
-      return {
-        date:        p.date,
-        btcPrice:    p.btcPrice,
-        avgBuyPrice: lastAvg ? lastAvg.avgBuyPrice : null,
-        bot:         isBuyDate ? lastAvg.bot : null,
-      };
-    });
-
-    // Monthly spend breakdown for bar chart
+    // Monthly spend breakdown
     const monthMap = {};
     all.forEach(e => {
       const month = e.date.slice(0, 7);
-      if (!monthMap[month]) monthMap[month] = { month, DCA: 0, Crash: 0, ATH: 0 };
+      if (!monthMap[month]) monthMap[month] = { month, MA: 0, ATH: 0 };
       monthMap[month][e.bot] += e.usdtSpent;
     });
     const monthlyChart = Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month));
 
-    // Contribution bars
     const contribution = [
-      { name: 'DCA Bot',   invested: dcaInvested,   btc: dcaBtc,   avg: dcaBtc   > 0 ? dcaInvested / dcaBtc     : 0, buys: dcaEnriched.length,   color: '#6366f1' },
-      { name: 'Crash Bot', invested: crashInvested, btc: crashBtc, avg: crashBtc > 0 ? crashInvested / crashBtc : 0, buys: crashEnriched.length, color: '#ef4444' },
-      { name: 'ATH-DCA',   invested: athInvested,   btc: athBtc,   avg: athBtc   > 0 ? athInvested / athBtc     : 0, buys: athEnriched.length,   color: '#7c3aed' },
+      { name: 'MA Mode',  invested: maInvested,  btc: maBtc,  avg: maBtc  > 0 ? maInvested / maBtc   : 0, buys: maEnriched.length,  color: '#6366f1' },
+      { name: 'ATH Mode', invested: athInvested, btc: athBtc, avg: athBtc > 0 ? athInvested / athBtc : 0, buys: athEnriched.length, color: '#7c3aed' },
     ];
 
     return { totalInvested, totalBtc, avgBuyPrice, positionValue, pnl, pnlPct, avgLine, monthlyChart, contribution, all };
-  }, [activeDca, activeCrash, activeAth, currentPrice, priceSeries]);
+  }, [showLive, liveData, currentPrice]);
 
   const formatUsd = v => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v);
   const formatBtc = v => `${v.toFixed(6)} BTC`;
@@ -172,7 +117,7 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Combined Summary</h1>
           <p className="mt-1 text-slate-600">
-            Overall performance across all three bots — {stats.all.length} total buys.
+            Hybrid dispatcher — combined MA mode + ATH mode performance — {stats.all.length} total buys over 4yr backtest.
           </p>
         </div>
 
@@ -216,7 +161,7 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
                     <Line type="stepAfter" dataKey="avgBuyPrice" name="Avg Buy Price" stroke="#2563eb" strokeWidth={2} connectNulls dot={(props) => {
                       const { cx, cy, payload } = props;
                       if (!payload.bot) return null;
-                      const color = payload.bot === 'DCA' ? '#6366f1' : payload.bot === 'ATH' ? '#7c3aed' : '#ef4444';
+                      const color = payload.bot === 'MA' ? '#6366f1' : '#7c3aed';
                       return <circle key={`dot-${cx}-${cy}`} cx={cx} cy={cy} r={5} fill={color} stroke="#fff" strokeWidth={2} />;
                     }} />
                   </LineChart>
@@ -225,9 +170,8 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
               <div className="mt-3 flex items-center justify-center gap-6 text-sm text-slate-500">
                 <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-orange-400" /> BTC Price</div>
                 <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-blue-600" /> Avg Buy Price</div>
-                <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-500" /> DCA buy</div>
-                <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-red-500" /> Crash buy</div>
-                <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-violet-700" /> ATH-DCA buy</div>
+                <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-indigo-500" /> MA mode buy</div>
+                <div className="flex items-center gap-2"><span className="inline-block h-2.5 w-2.5 rounded-full bg-violet-700" /> ATH mode buy</div>
               </div>
             </CardContent>
           </Card>
@@ -264,8 +208,8 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
         {/* Monthly spend bar chart */}
         <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
           <CardHeader>
-            <CardTitle className="text-lg">Monthly Spend — DCA vs Crash Bot vs ATH-DCA</CardTitle>
-            <p className="text-sm text-slate-500">USDT deployed each month, split by bot.</p>
+            <CardTitle className="text-lg">Monthly Spend — MA Mode vs ATH Mode</CardTitle>
+            <p className="text-sm text-slate-500">USDT deployed each month by the hybrid dispatcher, split by mode.</p>
           </CardHeader>
           <CardContent>
             <div className="h-[280px]">
@@ -276,9 +220,8 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
                   <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `$${v}`} />
                   <Tooltip formatter={(v, name) => [formatUsd(v), name]} />
                   <Legend />
-                  <Bar dataKey="DCA"   name="DCA Bot"   fill="#6366f1" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Crash" name="Crash Bot" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="ATH"   name="ATH-DCA"   fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="MA"  name="MA Mode"  fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="ATH" name="ATH Mode" fill="#7c3aed" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -306,11 +249,10 @@ export default function BtcSummaryDashboard({ liveData = null, isLive = false })
                 </thead>
                 <tbody>
                   {stats.all.map((e, i) => {
-                    const isDca  = e.bot === 'DCA';
-                    const isAth  = e.bot === 'ATH';
-                    const label  = isDca ? e.trigger : isAth ? `-${e.dip}% from ATH` : e.tier;
-                    const color  = isDca ? '#6366f1' : isAth ? '#7c3aed' : '#ef4444';
-                    const bgColor = isDca ? '#6366f120' : isAth ? '#7c3aed20' : '#ef444420';
+                    const isMa   = e.bot === 'MA';
+                    const label  = isMa ? (e.trigger || e.formulaText || 'MA') : (e.dip ? `-${Number(e.dip).toFixed(1)}% from ATH` : 'ATH');
+                    const color  = isMa ? '#6366f1' : '#7c3aed';
+                    const bgColor = isMa ? '#6366f120' : '#7c3aed20';
                     return (
                       <tr key={e.date + i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                         <td className="px-4 py-3 text-slate-700">{e.date}</td>

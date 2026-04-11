@@ -1,13 +1,13 @@
 # Dashboard Setup
 
-Two parts: the **API server** (Python) and the **React app** (Node.js).
-Run both on the same machine as your bots (Raspberry Pi / Mac Mini).
+Two parts: the **API server** (Python/Flask) and the **React app** (static build).
+Run both on the same machine as the bots (Raspberry Pi / Mac Mini).
 
 ---
 
 ## 1. API Server
 
-The API server reads the real bot log files and fetches the live BTC price from Binance.
+Reads both buy logs, the hybrid retained counter, and fetches live BTC price from Binance.
 
 ### Install dependencies
 
@@ -22,20 +22,28 @@ pip3 install -r requirements.txt
 python3 api_server.py
 ```
 
-Runs on `http://localhost:5050`. Keep it running in the background:
+Runs on `http://localhost:5050`. Start in the background:
 
 ```bash
-nohup python3 api_server.py &
+nohup python3 api_server.py >> api.log 2>&1 &
 ```
 
-Or add it to cron so it starts on reboot:
+Or auto-start on reboot via cron:
 
-```bash
-crontab -e
 ```
+@reboot /usr/bin/python3 /home/pi/Crypto/Dashboard/api_server.py >> /home/pi/Crypto/Dashboard/api.log 2>&1 &
 ```
-@reboot python3 /home/pi/Crypto/Dashboard/api_server.py
-```
+
+### What the API reads
+
+| Source file | Used for |
+|---|---|
+| `ATH-DCA-BOT/buy_log.json` | ATH-mode buy history |
+| `BTC-DCA-BOT/buy_log.json` | MA-mode buy history |
+| `HYBRID-DCA-BOT/retained.json` | Current retained weeks counter |
+| Binance API | Live BTC price |
+
+Serves everything at `GET /api/data`.
 
 ---
 
@@ -51,35 +59,31 @@ npm run build
 
 ### Serve the built app
 
-Install a simple static file server:
-
 ```bash
 npm install -g serve
-```
-
-Run it:
-
-```bash
 serve -s dist -l 3000
 ```
 
-Open `http://localhost:3000` (or replace `localhost` with your Pi/Mini IP to access from another device on your network).
+Open `http://localhost:3000` (or replace `localhost` with your Pi's IP to access from the network).
 
-Auto-start on reboot via cron:
+Auto-start on reboot:
 
-```bash
-@reboot serve -s /home/pi/Crypto/Dashboard/app/dist -l 3000
+```
+@reboot npx serve -s /home/pi/Crypto/Dashboard/app/dist -l 3000 >> /home/pi/Crypto/Dashboard/serve.log 2>&1 &
 ```
 
 ---
 
-## How live data works
+## Live vs Demo mode
 
-| Component | What it does |
+The dashboard has a **Live / Demo** toggle in the top-right corner.
+
+| Mode | What it shows |
 |---|---|
-| `api_server.py` | Reads `BTC-DCA-BOT/buy_log.json` and `BTC-Crash-BOT/crash_log.json`, fetches BTC price from Binance, serves everything at `/api/data` |
-| React dashboard | Fetches `/api/data` on load and every 60 seconds, auto-refreshes |
-| Fallback | If the API is unreachable the dashboard shows mock data with an "API offline" warning |
+| Demo | 4yr backtest simulation of the hybrid dispatcher on real weekly BTC data (Apr 2022–Apr 2026) |
+| Live | Real buy log data from `ATH-DCA-BOT/buy_log.json` and `BTC-DCA-BOT/buy_log.json` via the API |
+
+If the API is unreachable in Live mode, the dashboard shows an "API offline" warning and falls back to demo data.
 
 ---
 
@@ -90,8 +94,19 @@ cd Dashboard/app
 npm run dev
 ```
 
-Runs at `http://localhost:5173`. Point it to a different API server:
+Runs at `http://localhost:5173`. Point to a specific API host:
 
 ```bash
 VITE_API_URL=http://192.168.1.x:5050 npm run dev
+```
+
+---
+
+## Rebuilding after code changes
+
+```bash
+cd Dashboard/app
+npm run build
+pkill -f "serve -s"
+serve -s dist -l 3000 &
 ```
