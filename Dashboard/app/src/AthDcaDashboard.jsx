@@ -139,25 +139,25 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
 
   const filterByDays = (arr, r) => {
     if (r === 'all') return arr;
-    const days = r === '7d' ? 7 : r === '30d' ? 30 : 100;
+    const days = r === '30d' ? 30 : r === '1y' ? 365 : 730;
     const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
     return arr.filter(item => (item.date || '') >= cutoffStr);
   };
 
-  const avgXInterval = rangeAvg === '7d' ? 0 : rangeAvg === '30d' ? 1 : rangeAvg === '100d' ? 2 : 25;
+  const avgXInterval = rangeAvg === '30d' ? 1 : rangeAvg === '1y' ? 8 : rangeAvg === '2y' ? 13 : 25;
   const avgXFmt = v => {
     const [y, m, d] = v.split('-');
     const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return rangeAvg === 'all' ? `${mon[+m-1]} '${y.slice(2)}` : `${mon[+m-1]} ${+d}`;
+    return rangeAvg === '30d' ? `${mon[+m-1]} ${+d}` : `${mon[+m-1]} '${y.slice(2)}`;
   };
 
   const RangeDropdown = ({ value, onChange }) => (
     <select value={value} onChange={e => onChange(e.target.value)}
       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-300">
-      <option value="7d">7d</option>
       <option value="30d">30d</option>
-      <option value="100d">100d</option>
+      <option value="1y">1y</option>
+      <option value="2y">2y</option>
       <option value="all">All time</option>
     </select>
   );
