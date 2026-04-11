@@ -9,9 +9,10 @@ from email.mime.multipart import MIMEMultipart
 import ssl
 
 # === Paths and Config ===
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_PATH   = os.path.join(SCRIPT_DIR, ".env")
-LOG_FILE   = os.path.join(SCRIPT_DIR, "buy_log.json")
+SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+ENV_PATH    = os.path.join(SCRIPT_DIR, ".env")
+LOG_FILE    = os.path.join(SCRIPT_DIR, "buy_log.json")
+RETRY_FILE  = os.path.join(SCRIPT_DIR, "retry.json")
 
 load_dotenv(dotenv_path=ENV_PATH)
 api_key        = os.getenv("BINANCE_API_KEY")
@@ -80,12 +81,16 @@ else:
     print(f"💼 USDT balance: ${usdt_balance:.2f}")
 
     if usdt_balance < buy_amount:
-        subject = "❌ ATH-DCA - Insufficient Balance"
+        # Save retry flag — retry_buy.py will re-run full logic tomorrow
+        with open(RETRY_FILE, "w") as f:
+            json.dump({"failed_at": datetime.utcnow().isoformat()}, f)
+        subject = "❌ ATH-DCA - Insufficient Balance (retry scheduled)"
         body    = (
             f"Insufficient balance to execute buy.\n"
             f"Needed: ${buy_amount:.2f}, Available: ${usdt_balance:.2f}\n"
             f"Dip from ATH: {dip_pct * 100:.1f}%\n"
-            f"Rolling ATH (5yr): ${rolling_ath:,.2f}"
+            f"Rolling ATH (5yr): ${rolling_ath:,.2f}\n\n"
+            f"A retry has been scheduled for tomorrow at 09:30."
         )
         send_email(subject, body)
         print(subject)
@@ -113,7 +118,7 @@ else:
                 "usdt_spent":  cummulative_quote,
                 "rolling_ath": rolling_ath,
                 "dip_pct":     round(dip_pct * 100, 2),
-                "log_ratio":   round(log_ratio, 4),
+                "pow_ratio":   round(pow_ratio, 4),
                 "buy_amount":  buy_amount,
             }
 
