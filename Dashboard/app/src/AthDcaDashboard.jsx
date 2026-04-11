@@ -93,7 +93,9 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
         buyEvents.push({ date: w.date, price, ath, dip: dip * 100, buySize, btc });
       }
 
-      return { date: w.date, price, ath, triggerPrice: triggerPx, dip: dip * 100, buySize: buySize || 0, bought };
+      const avgBuyPrice = totalBtc > 0 ? totalInvested / totalBtc : null;
+
+      return { date: w.date, price, ath, triggerPrice: triggerPx, dip: dip * 100, buySize: buySize || 0, bought, ma7: w.ma7, avgBuyPrice };
     });
 
     // Update last point with current live price
@@ -221,7 +223,43 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
           );
         })()}
 
-        {/* Buy curve + price chart */}
+        {/* Price vs ATH — full width, tall */}
+        <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg">BTC Price vs 5yr Rolling ATH</CardTitle>
+                <p className="mt-1 text-sm text-slate-500">
+                  Orange = BTC price. Grey dashed = rolling ATH. Green dashed = buy trigger (-15%). Purple dots = simulated buys.
+                </p>
+              </div>
+              <RangeToggle />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[420px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={filterByRange(sim.enriched)}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={xFmt} interval={xInterval} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 5000', 'dataMax + 5000']} />
+                  <Tooltip formatter={(v, name) => [formatUsd(v), name]} labelFormatter={l => `Week of ${l}`} />
+                  <Line type="monotone" dataKey="ath"          stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="6 3" name="Rolling ATH" />
+                  <Line type="monotone" dataKey="triggerPrice" stroke="#10b981" strokeWidth={1}   dot={false} strokeDasharray="4 4" name="Trigger -15%" />
+                  <Line type="monotone" dataKey="price"        stroke="#f97316" strokeWidth={2.5} name="BTC Price"
+                    dot={(props) => {
+                      const { cx, cy, payload } = props;
+                      if (!payload.bought) return null;
+                      return <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={5} fill="#7c3aed" stroke="#fff" strokeWidth={2} />;
+                    }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Bottom row: buy curve (left) + avg buy price chart (right) */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
 
           {/* Algorithm curve */}
@@ -233,7 +271,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
               </p>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px]">
+              <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={buyCurve} margin={{ bottom: 20 }}>
                     <defs>
@@ -275,41 +313,32 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
             </CardContent>
           </Card>
 
-          {/* Price vs ATH — real history (backtest data used as reference in both modes) */}
+          {/* BTC price + 7d MA + ATH-DCA avg buy price */}
           <Card className="rounded-2xl border-0 shadow-lg shadow-black/5">
             <CardHeader>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <CardTitle className="text-lg">BTC Price vs 5yr Rolling ATH</CardTitle>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Orange = real BTC price. Grey dashed = rolling ATH. Green dashed = buy trigger (-15%). Purple dots = simulated buys.
-                  </p>
-                </div>
-                <RangeToggle />
-              </div>
+              <CardTitle className="text-lg">BTC Price vs Avg Buy Price</CardTitle>
+              <p className="text-sm text-slate-500">
+                Orange = BTC price. Green = 7d MA. Blue stepped = ATH-DCA running average buy price (updates on each simulated buy).
+              </p>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px]">
+              <div className="h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={filterByRange(sim.enriched)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={xFmt} interval={xInterval} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 5000', 'dataMax + 5000']} />
-                    <Tooltip
-                      formatter={(v, name) => [formatUsd(v), name]}
-                      labelFormatter={l => `Week of ${l}`}
-                    />
-                    <Line type="monotone" dataKey="ath"          stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="6 3" name="Rolling ATH" />
-                    <Line type="monotone" dataKey="triggerPrice" stroke="#10b981" strokeWidth={1}   dot={false} strokeDasharray="4 4" name="Trigger -15%" />
-                    <Line type="monotone" dataKey="price"        stroke="#f97316" strokeWidth={2.5} name="BTC Price"
-                      dot={(props) => {
-                        const { cx, cy, payload } = props;
-                        if (!payload.bought) return null;
-                        return <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={5} fill="#7c3aed" stroke="#fff" strokeWidth={2} />;
-                      }}
-                    />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 3000', 'dataMax + 3000']} />
+                    <Tooltip formatter={(v, name) => [formatUsd(v), name]} labelFormatter={l => `Week of ${l}`} />
+                    <Line type="monotone"   dataKey="price"        stroke="#f97316" strokeWidth={2.5} dot={false} name="BTC Price" />
+                    <Line type="monotone"   dataKey="ma7"          stroke="#16a34a" strokeWidth={1.5} dot={false} name="7d MA" strokeDasharray="4 2" />
+                    <Line type="stepAfter"  dataKey="avgBuyPrice"  stroke="#2563eb" strokeWidth={2}   dot={false} name="Avg Buy Price" connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500">
+                <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-orange-400" /> BTC Price</div>
+                <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-green-600" /> 7d MA</div>
+                <div className="flex items-center gap-2"><span className="inline-block h-0.5 w-5 rounded-full bg-blue-600" /> Avg Buy Price</div>
               </div>
             </CardContent>
           </Card>
