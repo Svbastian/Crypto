@@ -52,11 +52,11 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
   }, [liveData, currentPrice]);
 
   const xFmt = v => {
-    const [, m, d] = v.split('-');
+    const [y, m, d] = v.split('-');
     const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return `${mon[+m-1]} ${+d}`;
+    return range === 'all' ? `${mon[+m-1]} '${y.slice(2)}` : `${mon[+m-1]} ${+d}`;
   };
-  const xInterval = range === '7d' ? 1 : range === '30d' ? 3 : 10;
+  const xInterval = range === '3m' ? 3 : range === '6m' ? 6 : 25;
 
   const RangeToggle = () => (
     <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
@@ -164,7 +164,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
             <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700">Next Gen · 4yr Backtest</span>
           </div>
           <p className="mt-1 text-slate-600">
-            Logarithmic buy scaling based on distance from 5-year rolling ATH. Real BTC price history, real algorithm.
+            Power curve buy scaling based on distance from 5-year rolling ATH. Stays cheap at moderate dips, deploys heavily at extreme crashes.
           </p>
         </div>
 
@@ -296,7 +296,7 @@ export default function AthDcaDashboard({ liveData = null, isLive = false }) {
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={xFmt} interval={xInterval} />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${Math.round(v / 1000)}k`} domain={['dataMin - 5000', 'dataMax + 5000']} />
                     <Tooltip
-                      formatter={(v, name) => [formatUsd(v), name === 'price' ? 'BTC Price' : name === 'ath' ? 'Rolling ATH' : 'Trigger -15%']}
+                      formatter={(v, name) => [formatUsd(v), name]}
                       labelFormatter={l => `Week of ${l}`}
                     />
                     <Line type="monotone" dataKey="ath"          stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="6 3" name="Rolling ATH" />
